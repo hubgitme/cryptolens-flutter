@@ -24,9 +24,16 @@ final symbolRe = RegExp(r'^[A-Za-z0-9]{2,20}$');
 class IndCfg {
   bool on;
   Map<String, num> params;
-  IndCfg(this.on, this.params);
+  int? color; // ARGB؛ null = رنگ پیش‌فرض همان اندیکاتور
+  double width;
+  IndCfg(this.on, this.params, {this.color, this.width = 1.2});
   num p(String k, num def) => params[k] ?? def;
-  Map<String, dynamic> toJson() => {'on': on, 'params': params};
+  Map<String, dynamic> toJson() => {
+    'on': on,
+    'params': params,
+    if (color != null) 'color': color,
+    'width': width,
+  };
   factory IndCfg.fromJson(
     Map<String, dynamic>? j,
     bool defOn,
@@ -39,7 +46,14 @@ class IndCfg {
         if (v is num && params.containsKey(k)) params[k.toString()] = v;
       });
     }
-    return IndCfg(j?['on'] is bool ? j!['on'] as bool : defOn, params);
+    final c = j?['color'];
+    final w = j?['width'];
+    return IndCfg(
+      j?['on'] is bool ? j!['on'] as bool : defOn,
+      params,
+      color: c is int ? (c | 0xFF000000) : null,
+      width: w is num ? w.toDouble().clamp(0.5, 4) : 1.2,
+    );
   }
 }
 
@@ -67,6 +81,21 @@ Map<String, IndCfg> _defaultOverlays() => {
   'volume': IndCfg(false, {}),
 };
 
+const defaultPaneOrder = [
+  'rsi',
+  'rsisma',
+  'macd',
+  'stoch',
+  'atr',
+  'obv',
+  'roc',
+  'adx',
+  'cci',
+  'wpr',
+  'mom',
+  'mfi',
+];
+
 class AppSettings {
   AppSettings();
 
@@ -82,6 +111,21 @@ class AppSettings {
   String watchlistSort = 'default'; // default | change | volume
   Map<String, IndCfg> indicators = _defaultIndicators();
   Map<String, IndCfg> overlays = _defaultOverlays();
+  List<String> paneOrder = List.of(defaultPaneOrder);
+  bool magnet = true; // چسبیدن نقطه رسم به OHLC
+  bool lockAll = false; // قفل همه رسم‌ها
+  int drawColor = 0xFFF59E0B; // رنگ پیش‌فرض رسم تازه
+  List<double> fibLevels = [
+    0,
+    0.236,
+    0.382,
+    0.5,
+    0.618,
+    0.786,
+    1,
+    1.272,
+    1.618,
+  ];
 
   List<String> get watchlistSymbols => {
     ...topCoins,
@@ -100,6 +144,11 @@ class AppSettings {
     'watchlistSort': watchlistSort,
     'indicators': indicators.map((k, v) => MapEntry(k, v.toJson())),
     'overlays': overlays.map((k, v) => MapEntry(k, v.toJson())),
+    'paneOrder': paneOrder,
+    'magnet': magnet,
+    'lockAll': lockAll,
+    'drawColor': drawColor,
+    'fibLevels': fibLevels,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) {
@@ -140,6 +189,31 @@ class AppSettings {
 
     loadMap(j['indicators'], s.indicators);
     loadMap(j['overlays'], s.overlays);
+    if (j['paneOrder'] is List) {
+      final seen = <String>{};
+      final order = <String>[];
+      for (final k in (j['paneOrder'] as List).whereType<String>()) {
+        if (s.indicators.containsKey(k) && seen.add(k)) order.add(k);
+      }
+      for (final k in defaultPaneOrder) {
+        if (seen.add(k)) order.add(k);
+      }
+      s.paneOrder = order;
+    }
+    if (j['magnet'] is bool) s.magnet = j['magnet'] as bool;
+    if (j['lockAll'] is bool) s.lockAll = j['lockAll'] as bool;
+    if (j['drawColor'] is int) {
+      s.drawColor = (j['drawColor'] as int) | 0xFF000000;
+    }
+    if (j['fibLevels'] is List) {
+      final f = (j['fibLevels'] as List)
+          .whereType<num>()
+          .map((x) => x.toDouble())
+          .where((x) => x.isFinite && x >= -10 && x <= 20)
+          .take(15)
+          .toList();
+      if (f.isNotEmpty) s.fibLevels = f;
+    }
     return s;
   }
 }

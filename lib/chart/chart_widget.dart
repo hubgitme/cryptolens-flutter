@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../drawings.dart';
 import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
@@ -38,6 +39,20 @@ class ChartView extends StatefulWidget {
   final String iv;
   final int version; // با هر داده/تنظیم تازه عوض میشود
   final void Function(int? index)? onSelect;
+  // رسم‌ها
+  final List<Drawing> drawings;
+  final String tool; // cursor | trend | hline | fib | ewi | ewc
+  final int drawColor;
+  final bool magnet;
+  final bool lockAll;
+  final List<double> fibLevels;
+  final String? selectedDrawingId;
+  final int finishSignal; // تغییرش = تمام‌کردن رسم نیمه‌کاره
+  final int undoSignal; // تغییرش = برگرداندن آخرین نقطه/رسم
+  final VoidCallback? onDrawingsChanged;
+  final void Function(String? id)? onSelectDrawing;
+  final VoidCallback? onToolDone;
+  final void Function(int count)? onDraftCount;
   const ChartView({
     super.key,
     required this.candles,
@@ -47,6 +62,29 @@ class ChartView extends StatefulWidget {
     required this.iv,
     required this.version,
     this.onSelect,
+    required this.drawings,
+    this.tool = 'cursor',
+    this.drawColor = 0xFFF59E0B,
+    this.magnet = true,
+    this.lockAll = false,
+    this.fibLevels = const [
+      0,
+      0.236,
+      0.382,
+      0.5,
+      0.618,
+      0.786,
+      1,
+      1.272,
+      1.618,
+    ],
+    this.selectedDrawingId,
+    this.finishSignal = 0,
+    this.undoSignal = 0,
+    this.onDrawingsChanged,
+    this.onSelectDrawing,
+    this.onToolDone,
+    this.onDraftCount,
   });
 
   @override
@@ -62,6 +100,14 @@ class _ChartViewState extends State<ChartView> {
   double _plotW = 300;
   double _vOffset = 0; // اسکرول عمودی پنل‌ها
   double _maxVOffset = 0;
+  double _priceH = 300; // ارتفاع پنل قیمت (برای تبدیل مختصات رسم)
+  double _vOffNow = 0;
+  (double, double)? _range; // بازه قیمت فعلی پنل قیمت
+  List<DrawPt> _draft = []; // نقطه‌های رسم در حال ساخت
+  String? _dragId;
+  int? _dragPt;
+  List<Offset>? _dragOrig;
+  Offset? _dragStart;
   static const double _axisW = 58;
   static const double _paneH = 100; // ارتفاع ثابت هر پنل اندیکاتور
   static const int _rightPad = 8; // فضای خالی پیش‌فرض بعد از آخرین کندل
@@ -79,6 +125,137 @@ class _ChartViewState extends State<ChartView> {
     widget.onSelect?.call(i);
   }
 
+  int get _ivS => ivSeconds[widget.iv] ?? 3600;
+
+  Drawing? get _selectedDrawing {
+    for (final d in widget.drawings) {
+      if (d.id == widget.selectedDrawingId) return d;
+    }
+    return null;
+  }
+
+  double _yForPrice(double v) {
+    final r = _range;
+    if (r == null) return 0;
+    return _priceH - (v - r.$1) / (r.$2 - r.$1) * _priceH;
+  }
+
+  Offset _xyForPt(DrawPt pt) {
+    final cw = _plotW / _visible;
+    final lg = (pt.t - widget.candles[0].time) / _ivS;
+    return Offset((lg - _start + 0.5) * cw, _yForPrice(pt.p));
+  }
+
+  DrawPt? _ptForXY(double x, double py) {
+    if (widget.candles.isEmpty || _range == null) return null;
+    final r = _range!;
+    final price = r.$1 + (1 - py / _priceH) * (r.$2 - r.$1);
+    final cw = _plotW / _visible;
+    final idx = _start + (x / cw - 0.5).round();
+    return DrawPt(widget.candles[0].time + idx * _ivS, price);
+  }
+
+  DrawPt? _snap(double x, double py) {
+    final pt = _ptForXY(x, py);
+    if (pt == null || !widget.magnet) return pt;
+    final idx = ((pt.t - widget.candles[0].time) / _ivS).round();
+    if (idx < 0 || idx >= widget.candles.length) return pt;
+    final c = widget.candles[idx];
+    var best = pt.p, bd = 18.0;
+    for (final v in [c.open, c.high, c.low, c.close]) {
+      final d = (_yForPrice(v) - py).abs();
+      if (d < bd) {
+        bd = d;
+        best = v;
+      }
+    }
+    return DrawPt(pt.t, best);
+  }
+
+  static double _distSeg(double px, double py, Offset a, Offset b) {
+    final dx = b.dx - a.dx, dy = b.dy - a.dy;
+    final l2 = dx * dx + dy * dy;
+    var t = l2 == 0 ? 0.0 : ((px - a.dx) * dx + (py - a.dy) * dy) / l2;
+    t = t.clamp(0.0, 1.0);
+    final ex = px - (a.dx + t * dx), ey = py - (a.dy + t * dy);
+    return math.sqrt(ex * ex + ey * ey);
+  }
+
+  String? _hitTest(double x, double py) {
+    const r = 12.0;
+    if (widget.candles.isEmpty) return null;
+    for (var k = widget.drawings.length - 1; k >= 0; k--) {
+      final d = widget.drawings[k];
+      final p = d.pts.map(_xyForPt).toList();
+      if (d.type == 'hline') {
+        if ((p[0].dy - py).abs() < r) return d.id;
+        continue;
+      }
+      for (var i = 0; i < p.length - 1; i++) {
+        if (_distSeg(x, py, p[i], p[i + 1]) < r) return d.id;
+      }
+      if (d.type == 'fib') {
+        final xl = math.min(p[0].dx, p[1].dx);
+        if (x >= xl - r && x <= _plotW) {
+          for (final l in widget.fibLevels) {
+            final price = d.pts[1].p + (d.pts[0].p - d.pts[1].p) * l;
+            if ((_yForPrice(price) - py).abs() < r) return d.id;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  void _commitDraft() {
+    final d = Drawing(
+      id: newDrawId(),
+      type: widget.tool,
+      color: widget.drawColor,
+      pts: List.of(_draft),
+    );
+    widget.drawings.add(d);
+    _draft = [];
+    widget.onDraftCount?.call(0);
+    widget.onDrawingsChanged?.call();
+    widget.onSelectDrawing?.call(d.id);
+    widget.onToolDone?.call();
+    setState(() {});
+  }
+
+  void _finishDraft() {
+    if (_draft.length >= (widget.tool == 'hline' ? 1 : 2)) {
+      _commitDraft();
+    } else {
+      _draft = [];
+      widget.onDraftCount?.call(0);
+      setState(() {});
+    }
+  }
+
+  void _undo() {
+    if (_draft.isNotEmpty) {
+      _draft.removeLast();
+      widget.onDraftCount?.call(_draft.length);
+    } else if (widget.drawings.isNotEmpty) {
+      widget.drawings.removeLast();
+      widget.onSelectDrawing?.call(null);
+      widget.onDrawingsChanged?.call();
+    }
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(ChartView old) {
+    super.didUpdateWidget(old);
+    if (old.tool != widget.tool) {
+      _draft = [];
+      widget.onDraftCount?.call(0);
+    }
+    if (old.finishSignal != widget.finishSignal) _finishDraft();
+    if (old.undoSignal != widget.undoSignal) _undo();
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -93,13 +270,75 @@ class _ChartViewState extends State<ChartView> {
         final contentH = priceH + paneCount * _paneH;
         _maxVOffset = math.max(0.0, contentH - scrollH);
         final vOff = _vOffset.clamp(0.0, _maxVOffset);
+        _priceH = priceH;
+        _vOffNow = vOff;
+        _range = _priceRange(widget.candles, widget.overlays, _start, _visible);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onScaleStart: (_) {
+          onScaleStart: (d) {
             _startVisible = _visible;
             _panAcc = 0;
+            _dragId = null;
+            _dragPt = null;
+            _dragOrig = null;
+            _dragStart = null;
+            if (widget.tool != 'cursor' || widget.lockAll) return;
+            final sel = _selectedDrawing;
+            if (sel == null || sel.locked || widget.candles.isEmpty) return;
+            final x = d.localFocalPoint.dx;
+            final py = d.localFocalPoint.dy + _vOffNow;
+            if (py < 0 || py > _priceH || x > _plotW) return;
+            for (var i = 0; i < sel.pts.length; i++) {
+              if ((_xyForPt(sel.pts[i]) - Offset(x, py)).distance <= 22) {
+                _dragId = sel.id;
+                _dragPt = i;
+                return;
+              }
+            }
+            if (_hitTest(x, py) == sel.id) {
+              _dragId = sel.id;
+              _dragOrig = sel.pts.map(_xyForPt).toList();
+              _dragStart = d.localFocalPoint;
+            }
+          },
+          onScaleEnd: (_) {
+            if (_dragId != null) {
+              _dragId = null;
+              _dragPt = null;
+              _dragOrig = null;
+              _dragStart = null;
+              widget.onDrawingsChanged?.call();
+            }
           },
           onScaleUpdate: (d) {
+            if (_dragId != null) {
+              final sel = _selectedDrawing;
+              if (sel != null) {
+                if (_dragPt != null) {
+                  final pt = _snap(
+                    d.localFocalPoint.dx,
+                    d.localFocalPoint.dy + _vOffNow,
+                  );
+                  if (pt != null) sel.pts[_dragPt!] = pt;
+                } else if (_dragOrig != null && _dragStart != null) {
+                  final dx = d.localFocalPoint.dx - _dragStart!.dx;
+                  final dy = d.localFocalPoint.dy - _dragStart!.dy;
+                  final np = <DrawPt>[];
+                  var ok = true;
+                  for (final q in _dragOrig!) {
+                    final pt = _ptForXY(q.dx + dx, q.dy + dy);
+                    if (pt == null) {
+                      ok = false;
+                      break;
+                    }
+                    np.add(pt);
+                  }
+                  if (ok) sel.pts = np;
+                }
+              }
+              setState(() {});
+              return;
+            }
             setState(() {
               if (d.scale != 1) {
                 _visible = (_startVisible / d.scale).round().clamp(
@@ -126,7 +365,30 @@ class _ChartViewState extends State<ChartView> {
           },
           onLongPressStart: (d) => _select(_indexForX(d.localPosition.dx)),
           onLongPressMoveUpdate: (d) => _select(_indexForX(d.localPosition.dx)),
-          onTapUp: (d) => _select(_indexForX(d.localPosition.dx)),
+          onTapUp: (d) {
+            final x = d.localPosition.dx;
+            final py = d.localPosition.dy + _vOffNow;
+            if (widget.tool != 'cursor') {
+              if (py < 0 || py > _priceH || x > _plotW) return;
+              final pt = _snap(x, py);
+              if (pt == null) return;
+              setState(() => _draft.add(pt));
+              widget.onDraftCount?.call(_draft.length);
+              if (_draft.length >= (drawPointCount[widget.tool] ?? 2)) {
+                _commitDraft();
+              }
+              return;
+            }
+            if (py >= 0 && py <= _priceH && x <= _plotW) {
+              final hit = _hitTest(x, py);
+              if (hit != null) {
+                widget.onSelectDrawing?.call(hit);
+                return;
+              }
+              widget.onSelectDrawing?.call(null);
+            }
+            _select(_indexForX(x));
+          },
           onDoubleTap: () => setState(() {
             _visible = 110;
             _offset = 0;
@@ -159,6 +421,15 @@ class _ChartViewState extends State<ChartView> {
                                   _visible,
                                   _selected,
                                   _axisW,
+                                  drawings: widget.drawings,
+                                  draftPts: _draft,
+                                  draftType: widget.tool,
+                                  drawColor: widget.drawColor,
+                                  selectedDrawingId: widget.selectedDrawingId,
+                                  tool: widget.tool,
+                                  lockAll: widget.lockAll,
+                                  fibLevels: widget.fibLevels,
+                                  ivSec: _ivS,
                                 ),
                               ),
                             ),
@@ -227,6 +498,42 @@ class _ChartViewState extends State<ChartView> {
   }
 }
 
+(double, double)? _priceRange(
+  List<Candle> candles,
+  List<LineSeries> overlays,
+  int start,
+  int visible,
+) {
+  var lo = double.infinity, hi = double.negativeInfinity;
+  for (
+    var i = math.max(0, start);
+    i < math.min(candles.length, start + visible);
+    i++
+  ) {
+    lo = math.min(lo, candles[i].low);
+    hi = math.max(hi, candles[i].high);
+  }
+  for (final s in overlays) {
+    for (
+      var i = math.max(0, start);
+      i < math.min(s.values.length, start + visible);
+      i++
+    ) {
+      final v = s.values[i];
+      if (v != null && v.isFinite) {
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
+    }
+  }
+  if (!lo.isFinite) return null;
+  final pad = (hi - lo) * 0.06 + 1e-9;
+  return (lo - pad, hi + pad);
+}
+
+String _fmtLevel(double l) =>
+    l == l.roundToDouble() ? l.toInt().toString() : l.toString();
+
 void _text(
   Canvas canvas,
   String s,
@@ -270,6 +577,15 @@ class _PricePainter extends CustomPainter {
   final int start, visible;
   final int? selected;
   final double axisW;
+  final List<Drawing> drawings;
+  final List<DrawPt> draftPts;
+  final String draftType;
+  final int drawColor;
+  final String? selectedDrawingId;
+  final String tool;
+  final bool lockAll;
+  final List<double> fibLevels;
+  final int ivSec;
   _PricePainter(
     this.candles,
     this.overlays,
@@ -277,8 +593,17 @@ class _PricePainter extends CustomPainter {
     this.start,
     this.visible,
     this.selected,
-    this.axisW,
-  );
+    this.axisW, {
+    this.drawings = const [],
+    this.draftPts = const [],
+    this.draftType = 'cursor',
+    this.drawColor = 0xFFF59E0B,
+    this.selectedDrawingId,
+    this.tool = 'cursor',
+    this.lockAll = false,
+    this.fibLevels = const [],
+    this.ivSec = 3600,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -287,32 +612,9 @@ class _PricePainter extends CustomPainter {
     final cw = plotW / visible;
     double x(int i) => (i - start + 0.5) * cw;
 
-    var lo = double.infinity, hi = double.negativeInfinity;
-    for (
-      var i = math.max(0, start);
-      i < math.min(candles.length, start + visible);
-      i++
-    ) {
-      lo = math.min(lo, candles[i].low);
-      hi = math.max(hi, candles[i].high);
-    }
-    for (final s in overlays) {
-      for (
-        var i = math.max(0, start);
-        i < math.min(s.values.length, start + visible);
-        i++
-      ) {
-        final v = s.values[i];
-        if (v != null && v.isFinite) {
-          lo = math.min(lo, v);
-          hi = math.max(hi, v);
-        }
-      }
-    }
-    if (!lo.isFinite) return;
-    final pad = (hi - lo) * 0.06 + 1e-9;
-    lo -= pad;
-    hi += pad;
+    final r = _priceRange(candles, overlays, start, visible);
+    if (r == null) return;
+    final lo = r.$1, hi = r.$2;
     double y(double v) => size.height - (v - lo) / (hi - lo) * size.height;
 
     final gridPaint = Paint()
@@ -405,6 +707,8 @@ class _PricePainter extends CustomPainter {
       canvas.drawPath(path, p);
     }
 
+    _drawDrawings(canvas, plotW, y, cw);
+
     final last = candles.last;
     final lp = Paint()
       ..color = (last.close >= last.open ? cGreen : cRed).withValues(alpha: 0.7)
@@ -444,6 +748,141 @@ class _PricePainter extends CustomPainter {
       Offset(plotW, size.height),
       Paint()..color = cBorder,
     );
+  }
+
+  void _drawDrawings(
+    Canvas canvas,
+    double plotW,
+    double Function(double) y,
+    double cw,
+  ) {
+    if (candles.isEmpty) return;
+    double xT(int t) => ((t - candles[0].time) / ivSec - start + 0.5) * cw;
+    final list = <Drawing>[...drawings];
+    if (draftPts.isNotEmpty && draftType != 'cursor') {
+      list.add(
+        Drawing(id: '_draft', type: draftType, color: drawColor, pts: draftPts),
+      );
+    }
+    for (final d in list) {
+      _drawOne(canvas, d, plotW, y, xT, d.id == selectedDrawingId);
+    }
+  }
+
+  void _drawOne(
+    Canvas canvas,
+    Drawing d,
+    double plotW,
+    double Function(double) y,
+    double Function(int) xT,
+    bool sel,
+  ) {
+    final temp = d.id == '_draft';
+    final alpha = temp ? 0.7 : 1.0;
+    final c = Color(d.color).withValues(alpha: alpha);
+    final sw = sel ? 2.6 : 1.6;
+    final p = d.pts.map((pt) => Offset(xT(pt.t), y(pt.p))).toList();
+    Paint line(Color col, double w) => Paint()
+      ..color = col
+      ..strokeWidth = w
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
+
+    if (d.type == 'hline') {
+      _dashedLine(
+        canvas,
+        Offset(0, p[0].dy),
+        Offset(plotW, p[0].dy),
+        line(c, sw),
+      );
+      _text(
+        canvas,
+        fmtPrice(d.pts[0].p),
+        Offset(plotW - 4, p[0].dy - 13),
+        c,
+        10,
+        align: TextAlign.right,
+      );
+    } else if (p.length < 2) {
+      canvas.drawCircle(p[0], 4, Paint()..color = c);
+    } else if (d.type == 'trend') {
+      canvas.drawLine(p[0], p[1], line(c, sw));
+    } else if (d.type == 'fib') {
+      final xl = math.min(p[0].dx, p[1].dx);
+      _dashedLine(
+        canvas,
+        p[0],
+        p[1],
+        line(Color(0xFF6B7280).withValues(alpha: alpha), 1),
+      );
+      for (var i = 0; i < fibLevels.length; i++) {
+        final l = fibLevels[i];
+        final price = d.pts[1].p + (d.pts[0].p - d.pts[1].p) * l;
+        final yy = y(price);
+        final col = Color(fibColors[i % fibColors.length])
+            .withValues(alpha: alpha);
+        canvas.drawLine(
+          Offset(xl, yy),
+          Offset(plotW, yy),
+          line(col, sel ? 1.6 : 1),
+        );
+        _text(
+          canvas,
+          '${_fmtLevel(l)} (${fmtPrice(price)})',
+          Offset(plotW - 4, yy - 12),
+          col,
+          10,
+          align: TextAlign.right,
+        );
+      }
+    } else {
+      final path = Path()..moveTo(p[0].dx, p[0].dy);
+      for (var i = 1; i < p.length; i++) {
+        path.lineTo(p[i].dx, p[i].dy);
+      }
+      canvas.drawPath(path, line(c, sw));
+      final labels = drawLabels[d.type] ?? const <String>[];
+      for (var i = 0; i < p.length; i++) {
+        final pr = d.pts[i].p;
+        final prev = i > 0 ? d.pts[i - 1].p : null;
+        final next = i < d.pts.length - 1 ? d.pts[i + 1].p : null;
+        final isHigh =
+            (prev == null || pr >= prev) && (next == null || pr >= next);
+        final cy = p[i].dy + (isHigh ? -16 : 16);
+        canvas.drawCircle(Offset(p[i].dx, cy), 9, Paint()..color = cBg);
+        canvas.drawCircle(
+          Offset(p[i].dx, cy),
+          9,
+          line(c, 1.3)..style = PaintingStyle.stroke,
+        );
+        if (i < labels.length) {
+          _text(
+            canvas,
+            labels[i],
+            Offset(p[i].dx, cy - 5),
+            c,
+            11,
+            align: TextAlign.center,
+          );
+        }
+      }
+    }
+
+    if (sel && !temp) {
+      final locked = d.locked || lockAll;
+      if (locked) {
+        _text(canvas, '🔒', Offset(p[0].dx + 8, p[0].dy - 16), c, 11);
+      } else if (tool == 'cursor') {
+        for (final q in p) {
+          canvas.drawCircle(
+            q,
+            7,
+            Paint()..color = Colors.white.withValues(alpha: 0.92),
+          );
+          canvas.drawCircle(q, 7, line(Color(d.color), 2));
+        }
+      }
+    }
   }
 
   @override
