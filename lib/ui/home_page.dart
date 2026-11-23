@@ -214,6 +214,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('rsi', 'period', 14);
       panes.add(
         PaneSpec(
+          'rsi',
           'RSI ($p)',
           [
             LineSeries(
@@ -236,6 +237,7 @@ class _HomePageState extends State<HomePage> {
       final r = calcRSI(closes, p);
       panes.add(
         PaneSpec(
+          'rsisma',
           'RSI+SMA ($p,$sm)',
           [
             LineSeries(
@@ -265,6 +267,7 @@ class _HomePageState extends State<HomePage> {
       final m = calcMACD(closes, f, sl2, sg);
       panes.add(
         PaneSpec(
+          'macd',
           'MACD ($f,$sl2,$sg)',
           [
             LineSeries(
@@ -287,6 +290,7 @@ class _HomePageState extends State<HomePage> {
       final st = calcStoch(d, k, dd, sm);
       panes.add(
         PaneSpec(
+          'stoch',
           'Stoch ($k,$dd,$sm)',
           [
             LineSeries(
@@ -305,7 +309,7 @@ class _HomePageState extends State<HomePage> {
       paneKeys.add('atr');
       final p = pi('atr', 'period', 14);
       panes.add(
-        PaneSpec('ATR ($p)', [
+        PaneSpec('atr', 'ATR ($p)', [
           LineSeries(
             calcATR(d, p),
             col(ind['atr']!, Color(0xFFF59E0B)),
@@ -319,7 +323,7 @@ class _HomePageState extends State<HomePage> {
       final sm = pi('obv', 'sma', 20);
       final obv = calcOBV(d);
       panes.add(
-        PaneSpec('OBV+SMA ($sm)', [
+        PaneSpec('obv', 'OBV+SMA ($sm)', [
           LineSeries(
             obv,
             col(ind['obv']!, Color(0xFF2962FF)),
@@ -338,6 +342,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('roc', 'period', 9);
       panes.add(
         PaneSpec(
+          'roc',
           'ROC ($p)',
           [
             LineSeries(
@@ -356,6 +361,7 @@ class _HomePageState extends State<HomePage> {
       final a = calcADX(d, p);
       panes.add(
         PaneSpec(
+          'adx',
           'ADX ($p)',
           [
             LineSeries(
@@ -375,6 +381,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('cci', 'period', 20);
       panes.add(
         PaneSpec(
+          'cci',
           'CCI ($p)',
           [
             LineSeries(
@@ -392,6 +399,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('wpr', 'period', 14);
       panes.add(
         PaneSpec(
+          'wpr',
           'Williams %R ($p)',
           [
             LineSeries(
@@ -410,6 +418,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('mom', 'period', 10);
       panes.add(
         PaneSpec(
+          'mom',
           'Momentum ($p)',
           [
             LineSeries(
@@ -427,6 +436,7 @@ class _HomePageState extends State<HomePage> {
       final p = pi('mfi', 'period', 14);
       panes.add(
         PaneSpec(
+          'mfi',
           'MFI ($p)',
           [
             LineSeries(
@@ -830,6 +840,11 @@ class _HomePageState extends State<HomePage> {
                       selectedDrawingId: _selDrawId,
                       finishSignal: _finishSig,
                       undoSignal: _undoSig,
+                      paneHeights: s.paneHeights,
+                      onPaneHeightsChanged: (m) {
+                        s.paneHeights = m;
+                        SettingsStore.save(s);
+                      },
                       onDrawingsChanged: () => DrawingsStore.save(_allDrawings),
                       onSelectDrawing: (id) {
                         if (_selDrawId != id) {

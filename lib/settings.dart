@@ -112,6 +112,8 @@ class AppSettings {
   Map<String, IndCfg> indicators = _defaultIndicators();
   Map<String, IndCfg> overlays = _defaultOverlays();
   List<String> paneOrder = List.of(defaultPaneOrder);
+  Map<String, double> paneHeights =
+      {}; // ارتفاع هر پنل (+ 'price')؛ خالی = پیش‌فرض
   bool magnet = true; // چسبیدن نقطه رسم به OHLC
   bool lockAll = false; // قفل همه رسم‌ها
   int drawColor = 0xFFF59E0B; // رنگ پیش‌فرض رسم تازه
@@ -145,6 +147,7 @@ class AppSettings {
     'indicators': indicators.map((k, v) => MapEntry(k, v.toJson())),
     'overlays': overlays.map((k, v) => MapEntry(k, v.toJson())),
     'paneOrder': paneOrder,
+    'paneHeights': paneHeights,
     'magnet': magnet,
     'lockAll': lockAll,
     'drawColor': drawColor,
@@ -199,6 +202,17 @@ class AppSettings {
         if (seen.add(k)) order.add(k);
       }
       s.paneOrder = order;
+    }
+    if (j['paneHeights'] is Map) {
+      final m = <String, double>{};
+      (j['paneHeights'] as Map).forEach((k, v) {
+        if (k is String &&
+            v is num &&
+            (k == 'price' || s.indicators.containsKey(k))) {
+          m[k] = v.toDouble().clamp(60, 1500);
+        }
+      });
+      s.paneHeights = m;
     }
     if (j['magnet'] is bool) s.magnet = j['magnet'] as bool;
     if (j['lockAll'] is bool) s.lockAll = j['lockAll'] as bool;

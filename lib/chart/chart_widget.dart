@@ -17,12 +17,14 @@ class LineSeries {
 }
 
 class PaneSpec {
+  final String key;
   final String title;
   final List<LineSeries> lines;
   final List<double?>? hist;
   final (double, double)? range; // بازه ثابت (مثل RSI: 0..100)
   final List<double> hlines;
   const PaneSpec(
+    this.key,
     this.title,
     this.lines, {
     this.hist,
@@ -49,6 +51,8 @@ class ChartView extends StatefulWidget {
   final String? selectedDrawingId;
   final int finishSignal; // تغییرش = تمام‌کردن رسم نیمه‌کاره
   final int undoSignal; // تغییرش = برگرداندن آخرین نقطه/رسم
+  final Map<String, double> paneHeights; // ارتفاع پنل‌ها (+ 'price')
+  final void Function(Map<String, double>)? onPaneHeightsChanged;
   final VoidCallback? onDrawingsChanged;
   final void Function(String? id)? onSelectDrawing;
   final VoidCallback? onToolDone;
@@ -81,6 +85,8 @@ class ChartView extends StatefulWidget {
     this.selectedDrawingId,
     this.finishSignal = 0,
     this.undoSignal = 0,
+    this.paneHeights = const {},
+    this.onPaneHeightsChanged,
     this.onDrawingsChanged,
     this.onSelectDrawing,
     this.onToolDone,
@@ -108,8 +114,43 @@ class _ChartViewState extends State<ChartView> {
   int? _dragPt;
   List<Offset>? _dragOrig;
   Offset? _dragStart;
+  // مقیاس قیمت آزاد (مثل تریدینگ‌ویو): جابه‌جایی و زوم عمودی
+  double _pShiftFrac = 0;
+  double _pScale = 1;
+  // ارتفاع پنل‌ها و حالت ژست جاری
+  Map<String, double> _heights = {};
+  int _gMode = 0; // 0 اسکرول صفحه، 1 پن قیمت، 2 زوم محور قیمت، 3 تغییر ارتفاع
+  String? _resizeKey;
+  double _resizeStartH = 0;
+  double _resizeStartY = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _heights = Map.of(widget.paneHeights);
+  }
+
+  double _paneHAt(int i) => _heights[widget.panes[i].key] ?? 110.0;
+
+  List<double> _edges(double priceH, List<double> paneHs) {
+    final out = <double>[priceH];
+    var acc = priceH;
+    for (final h in paneHs) {
+      acc += h;
+      out.add(acc);
+    }
+    return out;
+  }
+
+  (double, double)? _effRange((double, double)? base) {
+    if (base == null) return null;
+    final c = (base.$1 + base.$2) / 2;
+    final h = (base.$2 - base.$1) / 2;
+    final shift = _pShiftFrac * h * 2;
+    return (c - h / _pScale + shift, c + h / _pScale + shift);
+  }
+
   static const double _axisW = 58;
-  static const double _paneH = 100; // ارتفاع ثابت هر پنل اندیکاتور
   static const int _rightPad = 8; // فضای خالی پیش‌فرض بعد از آخرین کندل
 
   int get _start => widget.candles.length + _rightPad - _offset - _visible;
@@ -254,6 +295,7 @@ class _ChartViewState extends State<ChartView> {
     }
     if (old.finishSignal != widget.finishSignal) _finishDraft();
     if (old.undoSignal != widget.undoSignal) _undo();
+    if (_gMode != 3) _heights = Map.of(widget.paneHeights);
   }
 
   @override
@@ -262,17 +304,20 @@ class _ChartViewState extends State<ChartView> {
       builder: (context, cons) {
         _plotW = math.max(50, cons.maxWidth - _axisW);
         final paneCount = widget.panes.length;
-        // پنل قیمت و هر پنل اندیکاتور ارتفاع ثابت دارند؛ اگر مجموع از صفحه بلندتر شد عمودی اسکرول میشود
+        // هر پنل ارتفاع خودش را دارد (قابل تغییر با کشیدن لبه پایین)؛ مجموع بلندتر از صفحه اسکرول میشود
         final scrollH = math.max(50.0, cons.maxHeight - 22);
-        final priceH = paneCount == 0
-            ? scrollH
-            : math.max(250.0, scrollH * 0.55);
-        final contentH = priceH + paneCount * _paneH;
+        final priceH =
+            _heights['price'] ??
+            (paneCount == 0 ? scrollH : math.max(280.0, scrollH * 0.6));
+        final paneHs = [for (var i = 0; i < paneCount; i++) _paneHAt(i)];
+        final contentH = priceH + paneHs.fold(0.0, (a, b) => a + b);
         _maxVOffset = math.max(0.0, contentH - scrollH);
         final vOff = _vOffset.clamp(0.0, _maxVOffset);
         _priceH = priceH;
         _vOffNow = vOff;
-        _range = _priceRange(widget.candles, widget.overlays, _start, _visible);
+        _range = _effRange(
+          _priceRange(widget.candles, widget.overlays, _start, _visible),
+        );
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onScaleStart: (d) {
@@ -282,24 +327,54 @@ class _ChartViewState extends State<ChartView> {
             _dragPt = null;
             _dragOrig = null;
             _dragStart = null;
-            if (widget.tool != 'cursor' || widget.lockAll) return;
-            final sel = _selectedDrawing;
-            if (sel == null || sel.locked || widget.candles.isEmpty) return;
+            _gMode = 0;
+            _resizeKey = null;
             final x = d.localFocalPoint.dx;
-            final py = d.localFocalPoint.dy + _vOffNow;
-            if (py < 0 || py > _priceH || x > _plotW) return;
-            for (var i = 0; i < sel.pts.length; i++) {
-              if ((_xyForPt(sel.pts[i]) - Offset(x, py)).distance <= 22) {
-                _dragId = sel.id;
-                _dragPt = i;
-                return;
+            final cy = d.localFocalPoint.dy + _vOffNow; // مختصات محتوا
+            // اول: کشیدن رسم انتخاب‌شده
+            if (widget.tool == 'cursor' && !widget.lockAll) {
+              final sel = _selectedDrawing;
+              if (sel != null && !sel.locked && widget.candles.isNotEmpty) {
+                if (cy >= 0 && cy <= _priceH && x <= _plotW) {
+                  for (var i = 0; i < sel.pts.length; i++) {
+                    if ((_xyForPt(sel.pts[i]) - Offset(x, cy)).distance <= 22) {
+                      _dragId = sel.id;
+                      _dragPt = i;
+                      break;
+                    }
+                  }
+                  if (_dragId == null && _hitTest(x, cy) == sel.id) {
+                    _dragId = sel.id;
+                    _dragOrig = sel.pts.map(_xyForPt).toList();
+                    _dragStart = d.localFocalPoint;
+                  }
+                }
               }
             }
-            if (_hitTest(x, py) == sel.id) {
-              _dragId = sel.id;
-              _dragOrig = sel.pts.map(_xyForPt).toList();
-              _dragStart = d.localFocalPoint;
+            if (_dragId != null) return;
+            // تغییر ارتفاع پنل: نزدیک لبه پایین هر پنل
+            if (widget.panes.isNotEmpty) {
+              var edge = _priceH;
+              if ((cy - edge).abs() <= 10) {
+                _gMode = 3;
+                _resizeKey = 'price';
+                _resizeStartH = _priceH;
+                _resizeStartY = d.localFocalPoint.dy;
+                return;
+              }
+              for (var i = 0; i < widget.panes.length; i++) {
+                edge += _paneHAt(i);
+                if ((cy - edge).abs() <= 10) {
+                  _gMode = 3;
+                  _resizeKey = widget.panes[i].key;
+                  _resizeStartH = _paneHAt(i);
+                  _resizeStartY = d.localFocalPoint.dy;
+                  return;
+                }
+              }
             }
+            // روی پنل قیمت: درگ عمودی = جابه‌جایی قیمت؛ روی محور = زوم مقیاس
+            if (cy < _priceH) _gMode = x > _plotW ? 2 : 1;
           },
           onScaleEnd: (_) {
             if (_dragId != null) {
@@ -309,6 +384,11 @@ class _ChartViewState extends State<ChartView> {
               _dragStart = null;
               widget.onDrawingsChanged?.call();
             }
+            if (_gMode == 3) {
+              widget.onPaneHeightsChanged?.call(Map.of(_heights));
+            }
+            _gMode = 0;
+            _resizeKey = null;
           },
           onScaleUpdate: (d) {
             if (_dragId != null) {
@@ -339,6 +419,17 @@ class _ChartViewState extends State<ChartView> {
               setState(() {});
               return;
             }
+            if (_gMode == 3 && _resizeKey != null) {
+              final dy = d.localFocalPoint.dy - _resizeStartY;
+              final minH = _resizeKey == 'price' ? 180.0 : 60.0;
+              setState(
+                () => _heights[_resizeKey!] = (_resizeStartH + dy).clamp(
+                  minH,
+                  900.0,
+                ),
+              );
+              return;
+            }
             setState(() {
               if (d.scale != 1) {
                 _visible = (_startVisible / d.scale).round().clamp(
@@ -357,10 +448,19 @@ class _ChartViewState extends State<ChartView> {
                 );
                 _panAcc -= delta * cw;
               }
-              _vOffset = (_vOffset - d.focalPointDelta.dy).clamp(
-                0.0,
-                _maxVOffset,
-              );
+              if (_gMode == 1) {
+                // جابه‌جایی عمودی قیمت (چارت آزاد از بقیه)
+                _pShiftFrac += d.focalPointDelta.dy / _priceH / _pScale;
+              } else if (_gMode == 2) {
+                // زوم مقیاس قیمت با کشیدن محور
+                _pScale = (_pScale * math.exp(-d.focalPointDelta.dy / 150))
+                    .clamp(0.2, 5.0);
+              } else {
+                _vOffset = (_vOffset - d.focalPointDelta.dy).clamp(
+                  0.0,
+                  _maxVOffset,
+                );
+              }
             });
           },
           onLongPressStart: (d) => _select(_indexForX(d.localPosition.dx)),
@@ -393,6 +493,8 @@ class _ChartViewState extends State<ChartView> {
             _visible = 110;
             _offset = 0;
             _vOffset = 0;
+            _pShiftFrac = 0;
+            _pScale = 1;
             _selected = null;
           }),
           child: Column(
@@ -422,6 +524,7 @@ class _ChartViewState extends State<ChartView> {
                                   _selected,
                                   _axisW,
                                   drawings: widget.drawings,
+                                  range: _range,
                                   draftPts: _draft,
                                   draftType: widget.tool,
                                   drawColor: widget.drawColor,
@@ -433,13 +536,13 @@ class _ChartViewState extends State<ChartView> {
                                 ),
                               ),
                             ),
-                            for (final pane in widget.panes)
+                            for (var i = 0; i < widget.panes.length; i++)
                               SizedBox(
-                                height: _paneH,
+                                height: paneHs[i],
                                 child: CustomPaint(
                                   size: Size.infinite,
                                   painter: _PanePainter(
-                                    pane,
+                                    widget.panes[i],
                                     widget.candles.length,
                                     _start,
                                     _visible,
@@ -451,6 +554,24 @@ class _ChartViewState extends State<ChartView> {
                           ],
                         ),
                       ),
+                      // دستگیره‌های تغییر ارتفاع پنل‌ها (لبه پایین هر پنل)
+                      if (paneCount > 0)
+                        for (final edge in _edges(priceH, paneHs))
+                          Positioned(
+                            top: edge - vOff - 7,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Container(
+                                width: 36,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: cMuted.withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                          ),
                       if (_maxVOffset > 0)
                         Positioned(
                           right: 2,
@@ -586,6 +707,7 @@ class _PricePainter extends CustomPainter {
   final bool lockAll;
   final List<double> fibLevels;
   final int ivSec;
+  final (double, double)? range;
   _PricePainter(
     this.candles,
     this.overlays,
@@ -603,16 +725,18 @@ class _PricePainter extends CustomPainter {
     this.lockAll = false,
     this.fibLevels = const [],
     this.ivSec = 3600,
+    this.range,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final plotW = size.width - axisW;
     if (candles.isEmpty || plotW <= 0) return;
+    canvas.clipRect(Offset.zero & size); // رسم‌ها از پنل قیمت بیرون نزنند
     final cw = plotW / visible;
     double x(int i) => (i - start + 0.5) * cw;
 
-    final r = _priceRange(candles, overlays, start, visible);
+    final r = range ?? _priceRange(candles, overlays, start, visible);
     if (r == null) return;
     final lo = r.$1, hi = r.$2;
     double y(double v) => size.height - (v - lo) / (hi - lo) * size.height;
@@ -907,6 +1031,7 @@ class _PanePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final plotW = size.width - axisW;
     if (plotW <= 0 || total == 0) return;
+    canvas.clipRect(Offset.zero & size);
     final cw = plotW / visible;
     double x(int i) => (i - start + 0.5) * cw;
 
@@ -1021,6 +1146,37 @@ class _PanePainter extends CustomPainter {
         }
       }
       canvas.drawPath(path, p);
+    }
+    // مقدار اندیکاتور روی محور کناری (مثل نسخه وب)
+    if (pane.lines.isNotEmpty) {
+      final vs = pane.lines.first.values;
+      double? chipV;
+      if (selected != null && selected! >= 0 && selected! < vs.length) {
+        chipV = vs[selected!];
+      }
+      if (chipV == null) {
+        for (var i = vs.length - 1; i >= 0; i--) {
+          if (vs[i] != null) {
+            chipV = vs[i];
+            break;
+          }
+        }
+      }
+      if (chipV != null && chipV.isFinite) {
+        final cy = y(chipV);
+        canvas.drawRect(
+          Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
+          Paint()..color = pane.lines.first.color,
+        );
+        _text(
+          canvas,
+          fmtNum(chipV),
+          Offset(size.width - 4, cy - 6),
+          Colors.white,
+          9,
+          align: TextAlign.right,
+        );
+      }
     }
     if (selected != null && selected! >= 0 && selected! < total) {
       final p = Paint()
