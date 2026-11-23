@@ -38,7 +38,11 @@ jobs:
       - name: Build release APK (arm64 only)
         run: |
           flutter build apk --release --target-platform android-arm64 --build-number=${{ github.run_number }} --build-name=1.1.${{ github.run_number }}
-          cp build/app/outputs/flutter-apk/app-release.apk cryptolens-arm64.apk
+          base64 -d keystore/release.p12.b64 > /tmp/release.p12
+          BT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)
+          ${BT}zipalign -f -p 4 build/app/outputs/flutter-apk/app-release.apk /tmp/aligned.apk
+          ${BT}apksigner sign --ks /tmp/release.p12 --ks-type PKCS12 --ks-pass pass:cryptolens --key-pass pass:cryptolens --out cryptolens-arm64.apk /tmp/aligned.apk
+          ${BT}apksigner verify --print-certs cryptolens-arm64.apk
           ls -lh cryptolens-arm64.apk
 
       - name: Publish APK to GitHub Release
