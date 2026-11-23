@@ -8,6 +8,34 @@ import '../format.dart';
 import '../models.dart';
 import '../theme.dart';
 
+const _paneLineLabels = {
+  'rsi': ['RSI'],
+  'rsisma': ['RSI', 'SMA'],
+  'macd': ['MACD', 'Signal'],
+  'stoch': ['%K', '%D'],
+  'atr': ['ATR'],
+  'obv': ['OBV', 'SMA'],
+  'roc': ['ROC'],
+  'adx': ['ADX', '+DI', '-DI'],
+  'cci': ['CCI'],
+  'wpr': ['%R'],
+  'mom': ['MOM'],
+  'mfi': ['MFI'],
+};
+
+double? _lineValue(List<double?> vs, int? selected) {
+  if (selected != null &&
+      selected >= 0 &&
+      selected < vs.length &&
+      vs[selected] != null) {
+    return vs[selected];
+  }
+  for (var i = vs.length - 1; i >= 0; i--) {
+    if (vs[i] != null) return vs[i];
+  }
+  return null;
+}
+
 class LineSeries {
   final List<double?> values;
   final Color color;
@@ -53,6 +81,9 @@ class ChartView extends StatefulWidget {
   final int undoSignal; // تغییرش = برگرداندن آخرین نقطه/رسم
   final Map<String, double> paneHeights; // ارتفاع پنل‌ها (+ 'price')
   final void Function(Map<String, double>)? onPaneHeightsChanged;
+  final void Function(String key, int dir)? onMovePane;
+  final void Function(String key)? onClosePane;
+  final VoidCallback? onOpenSettings;
   final VoidCallback? onDrawingsChanged;
   final void Function(String? id)? onSelectDrawing;
   final VoidCallback? onToolDone;
@@ -87,6 +118,9 @@ class ChartView extends StatefulWidget {
     this.undoSignal = 0,
     this.paneHeights = const {},
     this.onPaneHeightsChanged,
+    this.onMovePane,
+    this.onClosePane,
+    this.onOpenSettings,
     this.onDrawingsChanged,
     this.onSelectDrawing,
     this.onToolDone,
@@ -136,10 +170,76 @@ class _ChartViewState extends State<ChartView> {
     final out = <double>[priceH];
     var acc = priceH;
     for (final h in paneHs) {
-      acc += h;
+      acc += _legendH + h;
       out.add(acc);
     }
     return out;
+  }
+
+  Widget _legendRow(PaneSpec pane) {
+    final labels = _paneLineLabels[pane.key] ?? const <String>[];
+    final spans = <TextSpan>[];
+    for (var i = 0; i < pane.lines.length; i++) {
+      final v = _lineValue(pane.lines[i].values, _selected);
+      final label = i < labels.length ? labels[i] : '';
+      spans.add(
+        TextSpan(
+          text:
+              '${label.isEmpty ? '' : '$label '}${v == null ? '—' : fmtNum(v)}  ',
+          style: TextStyle(color: pane.lines[i].color, fontSize: 11),
+        ),
+      );
+    }
+    Widget miniBtn(IconData icon, VoidCallback? onTap, String tip) {
+      return IconButton(
+        icon: Icon(icon, size: 14, color: cMuted),
+        tooltip: tip,
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints(minWidth: 22, minHeight: 22),
+        onPressed: onTap,
+      );
+    }
+
+    return SizedBox(
+      height: _legendH,
+      child: Row(
+        children: [
+          SizedBox(width: 6),
+          Text(
+            pane.title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          miniBtn(
+            Icons.arrow_drop_up,
+            () => widget.onMovePane?.call(pane.key, -1),
+            'بالاتر',
+          ),
+          miniBtn(
+            Icons.arrow_drop_down,
+            () => widget.onMovePane?.call(pane.key, 1),
+            'پایین‌تر',
+          ),
+          miniBtn(Icons.settings, widget.onOpenSettings, 'تنظیمات'),
+          miniBtn(
+            Icons.close,
+            () => widget.onClosePane?.call(pane.key),
+            'حذف از چارت',
+          ),
+          SizedBox(width: 4),
+          Expanded(
+            child: RichText(
+              text: TextSpan(children: spans),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   (double, double)? _effRange((double, double)? base) {
@@ -151,6 +251,7 @@ class _ChartViewState extends State<ChartView> {
   }
 
   static const double _axisW = 58;
+  static const double _legendH = 22; // ارتفاع ردیف لجند هر پنل
   static const int _rightPad = 8; // فضای خالی پیش‌فرض بعد از آخرین کندل
 
   int get _start => widget.candles.length + _rightPad - _offset - _visible;
@@ -310,7 +411,7 @@ class _ChartViewState extends State<ChartView> {
             _heights['price'] ??
             (paneCount == 0 ? scrollH : math.max(280.0, scrollH * 0.6));
         final paneHs = [for (var i = 0; i < paneCount; i++) _paneHAt(i)];
-        final contentH = priceH + paneHs.fold(0.0, (a, b) => a + b);
+        final contentH = priceH + paneHs.fold(0.0, (a, b) => a + b + _legendH);
         _maxVOffset = math.max(0.0, contentH - scrollH);
         final vOff = _vOffset.clamp(0.0, _maxVOffset);
         _priceH = priceH;
@@ -363,7 +464,7 @@ class _ChartViewState extends State<ChartView> {
                 return;
               }
               for (var i = 0; i < widget.panes.length; i++) {
-                edge += _paneHAt(i);
+                edge += _legendH + _paneHAt(i);
                 if ((cy - edge).abs() <= 10) {
                   _gMode = 3;
                   _resizeKey = widget.panes[i].key;
@@ -536,7 +637,8 @@ class _ChartViewState extends State<ChartView> {
                                 ),
                               ),
                             ),
-                            for (var i = 0; i < widget.panes.length; i++)
+                            for (var i = 0; i < widget.panes.length; i++) ...[
+                              _legendRow(widget.panes[i]),
                               SizedBox(
                                 height: paneHs[i],
                                 child: CustomPaint(
@@ -551,6 +653,7 @@ class _ChartViewState extends State<ChartView> {
                                   ),
                                 ),
                               ),
+                            ],
                           ],
                         ),
                       ),
@@ -1084,23 +1187,22 @@ class _PanePainter extends CustomPainter {
       if (h >= lo && h <= hi)
         _dashedLine(canvas, Offset(0, y(h)), Offset(plotW, y(h)), hlPaint);
     }
-    _text(
-      canvas,
-      fmtNum(hi),
-      Offset(size.width - 4, 2),
-      cMuted,
-      9,
-      align: TextAlign.right,
-    );
-    _text(
-      canvas,
-      fmtNum(lo),
-      Offset(size.width - 4, size.height - 12),
-      cMuted,
-      9,
-      align: TextAlign.right,
-    );
-    _text(canvas, pane.title, const Offset(6, 3), cMuted, 10);
+    // گرید و برچسب‌های محور (مثل نسخه وب)
+    final gridPaint = Paint()
+      ..color = cGrid
+      ..strokeWidth = 1;
+    for (var g = 0; g <= 4; g++) {
+      final v = lo + (hi - lo) * g / 4;
+      canvas.drawLine(Offset(0, y(v)), Offset(plotW, y(v)), gridPaint);
+      _text(
+        canvas,
+        fmtNum(v),
+        Offset(size.width - 4, y(v) - 5),
+        cMuted,
+        9,
+        align: TextAlign.right,
+      );
+    }
 
     if (pane.hist != null) {
       final zeroY = y(0.0.clamp(lo, hi));
@@ -1147,36 +1249,34 @@ class _PanePainter extends CustomPainter {
       }
       canvas.drawPath(path, p);
     }
-    // مقدار اندیکاتور روی محور کناری (مثل نسخه وب)
-    if (pane.lines.isNotEmpty) {
-      final vs = pane.lines.first.values;
-      double? chipV;
-      if (selected != null && selected! >= 0 && selected! < vs.length) {
-        chipV = vs[selected!];
+    // چیپ مقدار همه خط‌ها و خطوط افقی روی محور کناری (مثل نسخه وب)
+    final chips = <(double, String, Color)>[];
+    for (final s in pane.lines) {
+      final v = _lineValue(s.values, selected);
+      if (v != null && v.isFinite) chips.add((y(v), fmtNum(v), s.color));
+    }
+    for (final h in pane.hlines) {
+      if (h >= lo && h <= hi) chips.add((y(h), fmtNum(h), cMuted));
+    }
+    chips.sort((a, b) => a.$1.compareTo(b.$1));
+    for (var i = 1; i < chips.length; i++) {
+      if (chips[i].$1 - chips[i - 1].$1 < 18) {
+        chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
       }
-      if (chipV == null) {
-        for (var i = vs.length - 1; i >= 0; i--) {
-          if (vs[i] != null) {
-            chipV = vs[i];
-            break;
-          }
-        }
-      }
-      if (chipV != null && chipV.isFinite) {
-        final cy = y(chipV);
-        canvas.drawRect(
-          Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
-          Paint()..color = pane.lines.first.color,
-        );
-        _text(
-          canvas,
-          fmtNum(chipV),
-          Offset(size.width - 4, cy - 6),
-          Colors.white,
-          9,
-          align: TextAlign.right,
-        );
-      }
+    }
+    for (final (cy, txt, col) in chips) {
+      canvas.drawRect(
+        Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
+        Paint()..color = col,
+      );
+      _text(
+        canvas,
+        txt,
+        Offset(size.width - 4, cy - 6),
+        Colors.white,
+        9,
+        align: TextAlign.right,
+      );
     }
     if (selected != null && selected! >= 0 && selected! < total) {
       final p = Paint()

@@ -460,6 +460,33 @@ class _HomePageState extends State<HomePage> {
     return (overlays: ov, panes: ordered);
   }
 
+  void _openSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cSurface,
+      builder: (_) => IndicatorSheet(settings: s, onChanged: _saveAndRefresh),
+    );
+  }
+
+  void _movePane(String key, int dir) {
+    final o = s.paneOrder;
+    final i = o.indexOf(key);
+    final j = i + dir;
+    if (i < 0 || j < 0 || j >= o.length) return;
+    final t = o[j];
+    o[j] = o[i];
+    o[i] = t;
+    SettingsStore.save(s);
+    setState(() => _version++);
+  }
+
+  void _closePane(String key) {
+    s.indicators[key]?.on = false;
+    SettingsStore.save(s);
+    setState(() => _version++);
+  }
+
   // ── نوار ابزار رسم ──
   Widget _toolBtn(String tool, IconData icon, String tip) {
     final active = _tool == tool;
@@ -728,13 +755,7 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: Icon(Icons.show_chart, color: cText),
             tooltip: 'اندیکاتورها و تنظیمات',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: cSurface,
-              builder: (_) =>
-                  IndicatorSheet(settings: s, onChanged: _saveAndRefresh),
-            ),
+            onPressed: _openSettings,
           ),
           IconButton(
             icon: Icon(Icons.refresh, color: cText),
@@ -845,6 +866,9 @@ class _HomePageState extends State<HomePage> {
                         s.paneHeights = m;
                         SettingsStore.save(s);
                       },
+                      onMovePane: _movePane,
+                      onClosePane: _closePane,
+                      onOpenSettings: _openSettings,
                       onDrawingsChanged: () => DrawingsStore.save(_allDrawings),
                       onSelectDrawing: (id) {
                         if (_selDrawId != id) {
