@@ -216,18 +216,18 @@ class _ChartViewState extends State<ChartView> {
           ),
           miniBtn(
             Icons.arrow_drop_up,
-            () => widget.onMovePane?.call(pane.key, -1),
+            widget.lockAll ? null : () => widget.onMovePane?.call(pane.key, -1),
             'بالاتر',
           ),
           miniBtn(
             Icons.arrow_drop_down,
-            () => widget.onMovePane?.call(pane.key, 1),
+            widget.lockAll ? null : () => widget.onMovePane?.call(pane.key, 1),
             'پایین‌تر',
           ),
           miniBtn(Icons.settings, widget.onOpenSettings, 'تنظیمات'),
           miniBtn(
             Icons.close,
-            () => widget.onClosePane?.call(pane.key),
+            widget.lockAll ? null : () => widget.onClosePane?.call(pane.key),
             'حذف از چارت',
           ),
           SizedBox(width: 4),
@@ -453,8 +453,8 @@ class _ChartViewState extends State<ChartView> {
               }
             }
             if (_dragId != null) return;
-            // تغییر ارتفاع پنل: نزدیک لبه پایین هر پنل
-            if (widget.panes.isNotEmpty) {
+            // تغییر ارتفاع پنل: نزدیک لبه پایین هر پنل (در حالت قفل غیرفعال)
+            if (!widget.lockAll && widget.panes.isNotEmpty) {
               var edge = _priceH;
               if ((cy - edge).abs() <= 10) {
                 _gMode = 3;
@@ -657,8 +657,8 @@ class _ChartViewState extends State<ChartView> {
                           ],
                         ),
                       ),
-                      // دستگیره‌های تغییر ارتفاع پنل‌ها (لبه پایین هر پنل)
-                      if (paneCount > 0)
+                      // دستگیره‌های تغییر ارتفاع پنل‌ها (لبه پایین هر پنل؛ در حالت قفل پنهان)
+                      if (paneCount > 0 && !widget.lockAll)
                         for (final edge in _edges(priceH, paneHs))
                           Positioned(
                             top: edge - vOff - 7,

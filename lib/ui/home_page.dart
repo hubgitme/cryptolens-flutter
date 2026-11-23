@@ -536,7 +536,7 @@ class _HomePageState extends State<HomePage> {
           ? 'قفل است — برای جابه‌جایی قفل را باز کنید'
           : 'بکشید تا جابه‌جا شود؛ نقطه‌ها را هم می‌توان کشید';
     }
-    return s.lockAll ? 'همه‌ی رسم‌ها قفل‌اند' : '';
+    return s.lockAll ? 'همه قفل شد: رسم‌ها و پنل‌ها' : '';
   }
 
   Future<void> _pickDrawColor() async {
