@@ -61,8 +61,9 @@ class _ChartViewState extends State<ChartView> {
   double _panAcc = 0;
   double _plotW = 300;
   static const double _axisW = 58;
+  static const int _rightPad = 8; // فضای خالی بعد از آخرین کندل (شیفت به چپ)
 
-  int get _start => widget.candles.length - _offset - _visible;
+  int get _start => widget.candles.length + _rightPad - _offset - _visible;
 
   int _indexForX(double x) {
     if (widget.candles.isEmpty) return 0;
@@ -80,7 +81,16 @@ class _ChartViewState extends State<ChartView> {
     return LayoutBuilder(
       builder: (context, cons) {
         _plotW = math.max(50, cons.maxWidth - _axisW);
+        final paneCount = widget.panes.length;
+        // ارتفاع پنل‌ها طوری تنظیم میشود که پنل قیمت همیشه حداقل ~۵۵٪ ارتفاع را داشته باشد
+        final paneH = paneCount == 0
+            ? 0.0
+            : math.min(
+                92.0,
+                math.max(56.0, (cons.maxHeight - 22) * 0.45 / paneCount),
+              );
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onScaleStart: (_) {
             _startVisible = _visible;
             _panAcc = 0;
@@ -90,7 +100,7 @@ class _ChartViewState extends State<ChartView> {
               if (d.scale != 1) {
                 _visible = (_startVisible / d.scale).round().clamp(
                   20,
-                  math.max(20, widget.candles.length),
+                  math.max(20, widget.candles.length + _rightPad),
                 );
               }
               _panAcc += d.focalPointDelta.dx;
@@ -131,7 +141,7 @@ class _ChartViewState extends State<ChartView> {
               ),
               for (final pane in widget.panes)
                 SizedBox(
-                  height: 92,
+                  height: paneH,
                   child: CustomPaint(
                     size: Size.infinite,
                     painter: _PanePainter(
@@ -241,7 +251,7 @@ class _PricePainter extends CustomPainter {
         i++
       ) {
         final v = s.values[i];
-        if (v != null) {
+        if (v != null && v.isFinite) {
           lo = math.min(lo, v);
           hi = math.max(hi, v);
         }
@@ -423,7 +433,7 @@ class _PanePainter extends CustomPainter {
           i++
         ) {
           final v = vs[i];
-          if (v != null) {
+          if (v != null && v.isFinite) {
             lo = math.min(lo, v);
             hi = math.max(hi, v);
           }
