@@ -477,7 +477,7 @@ class _PanePainter extends CustomPainter {
     _text(canvas, pane.title, const Offset(6, 3), cMuted, 10);
 
     if (pane.hist != null) {
-      final zeroY = y(0.clamp(lo, hi));
+      final zeroY = y(0.0.clamp(lo, hi));
       for (
         var i = math.max(0, start);
         i < math.min(pane.hist!.length, start + visible);

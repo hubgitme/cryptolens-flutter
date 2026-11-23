@@ -69,7 +69,7 @@ NumList calcVWAP(List<Candle> c, String iv) {
   return c.map((x) {
     final d = DateTime.fromMillisecondsSinceEpoch(x.time * 1000, isUtc: true);
     final k =
-        '${d.year}-${d.month}' + (iv == '1d' || iv == '1w' ? '' : '-${d.day}');
+        '${d.year}-${d.month}${iv == '1d' || iv == '1w' ? '' : '-${d.day}'}';
     if (k != key) {
       key = k;
       pv = 0;

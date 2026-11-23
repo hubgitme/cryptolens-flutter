@@ -68,6 +68,8 @@ Map<String, IndCfg> _defaultOverlays() => {
 };
 
 class AppSettings {
+  AppSettings();
+
   String symbol = 'BTCUSDT';
   String iv = '4h';
   int limit = 500;

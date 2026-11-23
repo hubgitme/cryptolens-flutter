@@ -164,7 +164,7 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                 DropdownButton<int>(
                   value: s.refresh,
                   dropdownColor: cSurface,
-                  items: [
+                  items: const [
                     DropdownMenuItem(value: 0, child: Text('خاموش')),
                     DropdownMenuItem(value: 15, child: Text('۱۵ ثانیه')),
                     DropdownMenuItem(value: 30, child: Text('۳۰ ثانیه')),
@@ -188,7 +188,7 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                 DropdownButton<String>(
                   value: s.chartType,
                   dropdownColor: cSurface,
-                  items: [
+                  items: const [
                     DropdownMenuItem(value: 'candles', child: Text('معمولی')),
                     DropdownMenuItem(value: 'ha', child: Text('هیکن آشی')),
                   ],

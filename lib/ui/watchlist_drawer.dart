@@ -139,7 +139,7 @@ class _WatchlistDrawerState extends State<WatchlistDrawer> {
                   DropdownButton<String>(
                     value: s.watchlistSort,
                     dropdownColor: cSurface,
-                    items: [
+                    items: const [
                       DropdownMenuItem(
                         value: 'default',
                         child: Text('پیش‌فرض'),

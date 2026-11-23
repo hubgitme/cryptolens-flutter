@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print, avoid_relative_lib_imports
 // بررسی مقادیر مرجع اندیکاتورها با Dart خالص (بدون Flutter): dart tool/check_indicators.dart
 import 'dart:math' as math;
 
