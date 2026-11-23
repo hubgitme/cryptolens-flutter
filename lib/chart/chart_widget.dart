@@ -60,8 +60,11 @@ class _ChartViewState extends State<ChartView> {
   int _startVisible = 110;
   double _panAcc = 0;
   double _plotW = 300;
+  double _vOffset = 0; // اسکرول عمودی پنل‌ها
+  double _maxVOffset = 0;
   static const double _axisW = 58;
-  static const int _rightPad = 8; // فضای خالی بعد از آخرین کندل (شیفت به چپ)
+  static const double _paneH = 100; // ارتفاع ثابت هر پنل اندیکاتور
+  static const int _rightPad = 8; // فضای خالی پیش‌فرض بعد از آخرین کندل
 
   int get _start => widget.candles.length + _rightPad - _offset - _visible;
 
@@ -82,13 +85,14 @@ class _ChartViewState extends State<ChartView> {
       builder: (context, cons) {
         _plotW = math.max(50, cons.maxWidth - _axisW);
         final paneCount = widget.panes.length;
-        // ارتفاع پنل‌ها طوری تنظیم میشود که پنل قیمت همیشه حداقل ~۵۵٪ ارتفاع را داشته باشد
-        final paneH = paneCount == 0
-            ? 0.0
-            : math.min(
-                92.0,
-                math.max(56.0, (cons.maxHeight - 22) * 0.45 / paneCount),
-              );
+        // پنل قیمت و هر پنل اندیکاتور ارتفاع ثابت دارند؛ اگر مجموع از صفحه بلندتر شد عمودی اسکرول میشود
+        final scrollH = math.max(50.0, cons.maxHeight - 22);
+        final priceH = paneCount == 0
+            ? scrollH
+            : math.max(250.0, scrollH * 0.55);
+        final contentH = priceH + paneCount * _paneH;
+        _maxVOffset = math.max(0.0, contentH - scrollH);
+        final vOff = _vOffset.clamp(0.0, _maxVOffset);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onScaleStart: (_) {
@@ -107,12 +111,17 @@ class _ChartViewState extends State<ChartView> {
               final cw = _plotW / _visible;
               final delta = (_panAcc / cw).round();
               if (delta != 0) {
+                // شیفت آزاد به چپ مثل تریدینگ‌ویو: تا وقتی حداقل ۱۰ کندل روی صفحه بماند
                 _offset = (_offset + delta).clamp(
-                  0,
+                  18 - _visible,
                   math.max(0, widget.candles.length - 20),
                 );
                 _panAcc -= delta * cw;
               }
+              _vOffset = (_vOffset - d.focalPointDelta.dy).clamp(
+                0.0,
+                _maxVOffset,
+              );
             });
           },
           onLongPressStart: (d) => _select(_indexForX(d.localPosition.dx)),
@@ -121,39 +130,82 @@ class _ChartViewState extends State<ChartView> {
           onDoubleTap: () => setState(() {
             _visible = 110;
             _offset = 0;
+            _vOffset = 0;
             _selected = null;
           }),
           child: Column(
             children: [
-              Expanded(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: _PricePainter(
-                    widget.candles,
-                    widget.overlays,
-                    widget.volumeOn,
-                    _start,
-                    _visible,
-                    _selected,
-                    _axisW,
+              SizedBox(
+                height: scrollH,
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: -vOff,
+                        height: contentH,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: priceH,
+                              child: CustomPaint(
+                                size: Size.infinite,
+                                painter: _PricePainter(
+                                  widget.candles,
+                                  widget.overlays,
+                                  widget.volumeOn,
+                                  _start,
+                                  _visible,
+                                  _selected,
+                                  _axisW,
+                                ),
+                              ),
+                            ),
+                            for (final pane in widget.panes)
+                              SizedBox(
+                                height: _paneH,
+                                child: CustomPaint(
+                                  size: Size.infinite,
+                                  painter: _PanePainter(
+                                    pane,
+                                    widget.candles.length,
+                                    _start,
+                                    _visible,
+                                    _selected,
+                                    _axisW,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (_maxVOffset > 0)
+                        Positioned(
+                          right: 2,
+                          top:
+                              (scrollH -
+                                  math.max(
+                                    30.0,
+                                    scrollH * scrollH / contentH,
+                                  )) *
+                              (vOff / _maxVOffset),
+                          child: Container(
+                            width: 4,
+                            height: math.max(
+                              30.0,
+                              scrollH * scrollH / contentH,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cMuted.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
-              for (final pane in widget.panes)
-                SizedBox(
-                  height: paneH,
-                  child: CustomPaint(
-                    size: Size.infinite,
-                    painter: _PanePainter(
-                      pane,
-                      widget.candles.length,
-                      _start,
-                      _visible,
-                      _selected,
-                      _axisW,
-                    ),
-                  ),
-                ),
               SizedBox(
                 height: 22,
                 child: CustomPaint(
