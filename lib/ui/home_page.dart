@@ -150,11 +150,16 @@ class _HomePageState extends State<HomePage> {
     final ov = <LineSeries>[];
     final o = s.overlays;
     Color col(IndCfg c, Color def) => c.color != null ? Color(c.color!) : def;
+    // رنگ خط iام: اول lineColors جدا، وگرنه خط اول = رنگ انتخابی اندیکاتور، بقیه = پیش‌فرض وب
+    Color lc(IndCfg c, int i, Color def) =>
+        (c.lineColors != null && i < c.lineColors!.length)
+        ? Color(c.lineColors![i])
+        : (i == 0 ? col(c, def) : def);
     if (o['sma']!.on)
       ov.add(
         LineSeries(
           calcSMA(closes, o['sma']!.p('period', 20).toInt()),
-          col(o['sma']!, Color(0xFFF59E0B)),
+          lc(o['sma']!, 0, Color(0xFFF59E0B)),
           width: o['sma']!.width,
         ),
       );
@@ -162,7 +167,7 @@ class _HomePageState extends State<HomePage> {
       ov.add(
         LineSeries(
           calcEMA(closes, o['ema']!.p('period', 20).toInt()),
-          col(o['ema']!, Color(0xFF3B82F6)),
+          lc(o['ema']!, 0, Color(0xFF3B82F6)),
           width: o['ema']!.width,
         ),
       );
@@ -172,16 +177,20 @@ class _HomePageState extends State<HomePage> {
         o['bb']!.p('period', 20).toInt(),
         o['bb']!.p('mult', 2).toDouble(),
       );
-      final bc = col(o['bb']!, Color(0xFFA855F7));
+      final bc = lc(o['bb']!, 0, Color(0xFFA855F7));
       ov.add(LineSeries(bb.mid, bc, width: o['bb']!.width));
-      ov.add(LineSeries(bb.up, bc, width: o['bb']!.width * 0.7));
-      ov.add(LineSeries(bb.lo, bc, width: o['bb']!.width * 0.7));
+      ov.add(
+        LineSeries(bb.up, lc(o['bb']!, 1, bc), width: o['bb']!.width * 0.7),
+      );
+      ov.add(
+        LineSeries(bb.lo, lc(o['bb']!, 2, bc), width: o['bb']!.width * 0.7),
+      );
     }
     if (o['vwap']!.on)
       ov.add(
         LineSeries(
           calcVWAP(d, s.iv),
-          col(o['vwap']!, Color(0xFF14B8A6)),
+          lc(o['vwap']!, 0, Color(0xFF14B8A6)),
           width: o['vwap']!.width,
         ),
       );
@@ -196,13 +205,27 @@ class _HomePageState extends State<HomePage> {
       ov.add(
         LineSeries(
           a.jaw,
-          col(o['alligator']!, Color(0xFF3B82F6)),
+          lc(o['alligator']!, 0, Color(0xFF2962FF)),
           width: aw,
           shift: alligatorShift.jaw,
         ),
       );
-      ov.add(LineSeries(a.teeth, cRed, width: aw, shift: alligatorShift.teeth));
-      ov.add(LineSeries(a.lips, cGreen, width: aw, shift: alligatorShift.lips));
+      ov.add(
+        LineSeries(
+          a.teeth,
+          lc(o['alligator']!, 1, cRed),
+          width: aw,
+          shift: alligatorShift.teeth,
+        ),
+      );
+      ov.add(
+        LineSeries(
+          a.lips,
+          lc(o['alligator']!, 2, cGreen),
+          width: aw,
+          shift: alligatorShift.lips,
+        ),
+      );
     }
 
     final panes = <PaneSpec>[];
@@ -219,7 +242,7 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcRSI(closes, p),
-              col(ind['rsi']!, Color(0xFFA855F7)),
+              lc(ind['rsi']!, 0, Color(0xFFFFC107)),
               width: ind['rsi']!.width,
             ),
           ],
@@ -242,12 +265,12 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               r,
-              col(ind['rsisma']!, Color(0xFFA855F7)),
+              lc(ind['rsisma']!, 0, Color(0xFFFFC107)),
               width: ind['rsisma']!.width,
             ),
             LineSeries(
               calcSMA(r, sm),
-              Color(0xFFF59E0B),
+              lc(ind['rsisma']!, 1, Color(0xFF3B82F6)),
               width: ind['rsisma']!.width,
             ),
           ],
@@ -272,10 +295,14 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               m.ml,
-              col(ind['macd']!, Color(0xFF2962FF)),
+              lc(ind['macd']!, 0, Color(0xFF2962FF)),
               width: ind['macd']!.width,
             ),
-            LineSeries(m.sl, Color(0xFFFF6D00), width: ind['macd']!.width),
+            LineSeries(
+              m.sl,
+              lc(ind['macd']!, 1, Color(0xFFFF6D00)),
+              width: ind['macd']!.width,
+            ),
           ],
           hist: m.hl,
           hlines: [0],
@@ -295,10 +322,14 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               st.k,
-              col(ind['stoch']!, Color(0xFF2962FF)),
+              lc(ind['stoch']!, 0, Color(0xFF2962FF)),
               width: ind['stoch']!.width,
             ),
-            LineSeries(st.d, Color(0xFFFF6D00), width: ind['stoch']!.width),
+            LineSeries(
+              st.d,
+              lc(ind['stoch']!, 1, Color(0xFFFF6D00)),
+              width: ind['stoch']!.width,
+            ),
           ],
           range: (0, 100),
           hlines: [80, 20],
@@ -312,7 +343,7 @@ class _HomePageState extends State<HomePage> {
         PaneSpec('atr', 'ATR ($p)', [
           LineSeries(
             calcATR(d, p),
-            col(ind['atr']!, Color(0xFFF59E0B)),
+            lc(ind['atr']!, 0, Color(0xFFFFC107)),
             width: ind['atr']!.width,
           ),
         ]),
@@ -326,12 +357,12 @@ class _HomePageState extends State<HomePage> {
         PaneSpec('obv', 'OBV+SMA ($sm)', [
           LineSeries(
             obv,
-            col(ind['obv']!, Color(0xFF2962FF)),
+            lc(ind['obv']!, 0, Color(0xFF2962FF)),
             width: ind['obv']!.width,
           ),
           LineSeries(
             calcSMA(obv, sm),
-            Color(0xFFF59E0B),
+            lc(ind['obv']!, 1, Color(0xFFFF6D00)),
             width: ind['obv']!.width,
           ),
         ]),
@@ -347,8 +378,32 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcROC(closes, p),
-              col(ind['roc']!, Color(0xFF14B8A6)),
+              lc(ind['roc']!, 0, Color(0xFFA855F7)),
               width: ind['roc']!.width,
+            ),
+          ],
+          hlines: [0],
+        ),
+      );
+    }
+    if (ind['rocma']!.on) {
+      paneKeys.add('rocma');
+      final p = pi('rocma', 'period', 9), sm = pi('rocma', 'sma', 14);
+      final r = calcROC(closes, p);
+      panes.add(
+        PaneSpec(
+          'rocma',
+          'ROC+MA ($p,$sm)',
+          [
+            LineSeries(
+              r,
+              lc(ind['rocma']!, 0, Color(0xFFA855F7)),
+              width: ind['rocma']!.width,
+            ),
+            LineSeries(
+              calcSMA(r, sm),
+              lc(ind['rocma']!, 1, Color(0xFFFF6D00)),
+              width: ind['rocma']!.width,
             ),
           ],
           hlines: [0],
@@ -366,11 +421,19 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               a.adx,
-              col(ind['adx']!, Colors.white),
+              lc(ind['adx']!, 0, Color(0xFFF59E0B)),
               width: ind['adx']!.width,
             ),
-            LineSeries(a.pdi, cGreen, width: ind['adx']!.width),
-            LineSeries(a.mdi, cRed, width: ind['adx']!.width),
+            LineSeries(
+              a.pdi,
+              lc(ind['adx']!, 1, cGreen),
+              width: ind['adx']!.width,
+            ),
+            LineSeries(
+              a.mdi,
+              lc(ind['adx']!, 2, cRed),
+              width: ind['adx']!.width,
+            ),
           ],
           range: (0, 100),
         ),
@@ -386,7 +449,7 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcCCI(d, p),
-              col(ind['cci']!, Color(0xFF14B8A6)),
+              lc(ind['cci']!, 0, Color(0xFF2962FF)),
               width: ind['cci']!.width,
             ),
           ],
@@ -404,7 +467,7 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcWPR(d, p),
-              col(ind['wpr']!, Color(0xFFEC4899)),
+              lc(ind['wpr']!, 0, Color(0xFF7E57C2)),
               width: ind['wpr']!.width,
             ),
           ],
@@ -423,7 +486,7 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcMOM(closes, p),
-              col(ind['mom']!, Color(0xFF84CC16)),
+              lc(ind['mom']!, 0, Color(0xFFFFA726)),
               width: ind['mom']!.width,
             ),
           ],
@@ -441,7 +504,7 @@ class _HomePageState extends State<HomePage> {
           [
             LineSeries(
               calcMFI(d, p),
-              col(ind['mfi']!, Color(0xFFA855F7)),
+              lc(ind['mfi']!, 0, Color(0xFF00BCD4)),
               width: ind['mfi']!.width,
             ),
           ],

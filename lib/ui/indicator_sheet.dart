@@ -4,25 +4,73 @@ import 'package:flutter/material.dart';
 import '../settings.dart';
 import '../theme.dart';
 
+// رنگ پیش‌فرض خط اول هر اندیکاتور — دقیقاً مثل نسخه وب (js/chart.js)
 const _defColors = {
   'sma': 0xFFF59E0B,
   'ema': 0xFF3B82F6,
   'bb': 0xFFA855F7,
   'vwap': 0xFF14B8A6,
-  'alligator': 0xFF3B82F6,
+  'alligator': 0xFF2962FF,
   'volume': 0xFF9CA3AF,
-  'rsi': 0xFFA855F7,
-  'rsisma': 0xFFA855F7,
+  'rsi': 0xFFFFC107,
+  'rsisma': 0xFFFFC107,
   'macd': 0xFF2962FF,
   'stoch': 0xFF2962FF,
-  'atr': 0xFFF59E0B,
+  'atr': 0xFFFFC107,
   'obv': 0xFF2962FF,
-  'roc': 0xFF14B8A6,
-  'adx': 0xFFFFFFFF,
-  'cci': 0xFF14B8A6,
-  'wpr': 0xFFEC4899,
-  'mom': 0xFF84CC16,
-  'mfi': 0xFFA855F7,
+  'roc': 0xFFA855F7,
+  'rocma': 0xFFA855F7,
+  'adx': 0xFFF59E0B,
+  'cci': 0xFF2962FF,
+  'wpr': 0xFF7E57C2,
+  'mom': 0xFFFFA726,
+  'mfi': 0xFF00BCD4,
+};
+
+// رنگ پیش‌فرض همه خط‌های هر اندیکاتور (مثل وب)
+const _defLineColors = {
+  'sma': [0xFFF59E0B],
+  'ema': [0xFF3B82F6],
+  'bb': [0xFFA855F7, 0xFFA855F7, 0xFFA855F7],
+  'vwap': [0xFF14B8A6],
+  'alligator': [0xFF2962FF, 0xFFEF5350, 0xFF26A69A],
+  'volume': [0xFF9CA3AF],
+  'rsi': [0xFFFFC107],
+  'rsisma': [0xFFFFC107, 0xFF3B82F6],
+  'macd': [0xFF2962FF, 0xFFFF6D00],
+  'stoch': [0xFF2962FF, 0xFFFF6D00],
+  'atr': [0xFFFFC107],
+  'obv': [0xFF2962FF, 0xFFFF6D00],
+  'roc': [0xFFA855F7],
+  'rocma': [0xFFA855F7, 0xFFFF6D00],
+  'adx': [0xFFF59E0B, 0xFF26A69A, 0xFFEF5350],
+  'cci': [0xFF2962FF],
+  'wpr': [0xFF7E57C2],
+  'mom': [0xFFFFA726],
+  'mfi': [0xFF00BCD4],
+};
+
+// نام هر خط برای دکمه رنگ جداگانه
+const _lineLabels = {
+  'sma': ['SMA'],
+  'ema': ['EMA'],
+  'bb': ['Mid', 'Up', 'Low'],
+  'vwap': ['VWAP'],
+  'alligator': ['Jaw', 'Teeth', 'Lips'],
+  'volume': ['Vol'],
+  'rsi': ['RSI'],
+  'rsisma': ['RSI', 'SMA'],
+  'macd': ['MACD', 'Signal'],
+  'stoch': ['%K', '%D'],
+  'atr': ['ATR'],
+  'obv': ['OBV', 'SMA'],
+  'roc': ['ROC'],
+  'rocma': ['ROC', 'MA'],
+  'adx': ['ADX', '+DI', '-DI'],
+  'cci': ['CCI'],
+  'wpr': ['%R'],
+  'mom': ['MOM'],
+  'mfi': ['MFI'],
 };
 
 const _paneTitles = {
@@ -33,6 +81,7 @@ const _paneTitles = {
   'atr': 'ATR',
   'obv': 'OBV+SMA',
   'roc': 'ROC',
+  'rocma': 'ROC+MA',
   'adx': 'ADX',
   'cci': 'CCI',
   'wpr': 'Williams %R',
@@ -123,6 +172,8 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
         ];
       case 'obv':
         return [_numField(cfg, 'sma', 'SMA')];
+      case 'rocma':
+        return [_numField(cfg, 'period', 'دوره'), _numField(cfg, 'sma', 'MA')];
       default:
         return cfg.params.containsKey('period')
             ? [_numField(cfg, 'period', 'دوره')]
@@ -138,6 +189,23 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
     return best;
   }
 
+  int _lineColorAt(IndCfg cfg, String key, int i) {
+    if (cfg.lineColors != null && i < cfg.lineColors!.length) {
+      return cfg.lineColors![i];
+    }
+    final defs = _defLineColors[key];
+    if (defs != null && i < defs.length) return defs[i];
+    return cfg.color ?? _defColors[key] ?? 0xFF9CA3AF;
+  }
+
+  void _setLineColor(IndCfg cfg, String key, int i, int argb) {
+    final n = (_lineLabels[key] ?? const ['']).length;
+    final cur = List<int>.generate(n, (j) => _lineColorAt(cfg, key, j));
+    cur[i] = argb;
+    cfg.lineColors = cur;
+    if (i == 0) cfg.color = argb;
+  }
+
   Widget _row(
     String title,
     String key,
@@ -146,7 +214,7 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
     int paneIndex = -1,
   }) {
     final s = widget.settings;
-    final dotColor = Color(cfg.color ?? _defColors[key] ?? 0xFF9CA3AF);
+    final labels = _lineLabels[key] ?? const [''];
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Column(
@@ -173,25 +241,41 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                   ),
                 ),
               ),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showColorPalette(context, dotColor);
-                  if (picked != null) {
-                    cfg.color = picked.toARGB32();
-                    widget.onChanged();
-                    setState(() {});
-                  }
-                },
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: cBorder),
+              // رنگ جداگانه هر خط
+              for (var i = 0; i < labels.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          final cur = Color(_lineColorAt(cfg, key, i));
+                          final picked = await showColorPalette(context, cur);
+                          if (picked != null) {
+                            _setLineColor(cfg, key, i, picked.toARGB32());
+                            widget.onChanged();
+                            setState(() {});
+                          }
+                        },
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Color(_lineColorAt(cfg, key, i)),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cBorder),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      Text(
+                        labels[i],
+                        style: TextStyle(color: cMuted, fontSize: 10),
+                      ),
+                    ],
                   ),
                 ),
-              ),
               SizedBox(width: 8),
               DropdownButton<double>(
                 value: _nearestWidth(cfg.width),
