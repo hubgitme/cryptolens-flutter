@@ -9,13 +9,11 @@ import '../models.dart';
 import '../theme.dart';
 
 const _paneLineLabels = {
-  'rsi': ['RSI'],
   'rsisma': ['RSI', 'SMA'],
   'macd': ['MACD', 'Signal'],
   'stoch': ['%K', '%D'],
   'atr': ['ATR'],
   'obv': ['OBV', 'SMA'],
-  'roc': ['ROC'],
   'rocma': ['ROC', 'MA'],
   'adx': ['ADX', '+DI', '-DI'],
   'cci': ['CCI'],
@@ -837,6 +835,10 @@ class _PricePainter extends CustomPainter {
     final plotW = size.width - axisW;
     if (candles.isEmpty || plotW <= 0) return;
     canvas.clipRect(Offset.zero & size); // رسم‌ها از پنل قیمت بیرون نزنند
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = cBg,
+    ); // پس‌زمینه دقیقاً مثل وب
     final cw = plotW / visible;
     double x(int i) => (i - start + 0.5) * cw;
 
@@ -1136,6 +1138,7 @@ class _PanePainter extends CustomPainter {
     final plotW = size.width - axisW;
     if (plotW <= 0 || total == 0) return;
     canvas.clipRect(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, Paint()..color = cBg);
     final cw = plotW / visible;
     double x(int i) => (i - start + 0.5) * cw;
 
