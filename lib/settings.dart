@@ -24,14 +24,16 @@ final symbolRe = RegExp(r'^[A-Za-z0-9]{2,20}$');
 class IndCfg {
   bool on;
   Map<String, num> params;
-  int? color; // ARGB؛ null = رنگ پیش‌فرض همان اندیکاتور
+  int? color; // ARGB؛ null = رنگ پیش‌فرض همان اندیکاتور (خط اول)
+  List<int>? lineColors; // رنگ جداگانه هر خط؛ null = پیش‌فرض وب
   double width;
-  IndCfg(this.on, this.params, {this.color, this.width = 1.2});
+  IndCfg(this.on, this.params, {this.color, this.lineColors, this.width = 1.2});
   num p(String k, num def) => params[k] ?? def;
   Map<String, dynamic> toJson() => {
     'on': on,
     'params': params,
     if (color != null) 'color': color,
+    if (lineColors != null) 'lineColors': lineColors,
     'width': width,
   };
   factory IndCfg.fromJson(
@@ -48,10 +50,17 @@ class IndCfg {
     }
     final c = j?['color'];
     final w = j?['width'];
+    List<int>? lcs;
+    final rawLc = j?['lineColors'];
+    if (rawLc is List) {
+      lcs = rawLc.whereType<int>().map((x) => x | 0xFF000000).take(8).toList();
+      if (lcs.isEmpty) lcs = null;
+    }
     return IndCfg(
       j?['on'] is bool ? j!['on'] as bool : defOn,
       params,
       color: c is int ? (c | 0xFF000000) : null,
+      lineColors: lcs,
       width: w is num ? w.toDouble().clamp(0.5, 4) : 1.2,
     );
   }
@@ -65,6 +74,7 @@ Map<String, IndCfg> _defaultIndicators() => {
   'obv': IndCfg(false, {'sma': 20}),
   'rsisma': IndCfg(false, {'period': 14, 'sma': 9, 'hi': 70, 'lo': 40}),
   'roc': IndCfg(false, {'period': 9}),
+  'rocma': IndCfg(false, {'period': 9, 'sma': 14}),
   'adx': IndCfg(false, {'period': 14}),
   'cci': IndCfg(false, {'period': 20}),
   'wpr': IndCfg(false, {'period': 14}),
@@ -89,6 +99,7 @@ const defaultPaneOrder = [
   'atr',
   'obv',
   'roc',
+  'rocma',
   'adx',
   'cci',
   'wpr',
