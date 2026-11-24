@@ -20,7 +20,34 @@ class CryptoLensApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: cBg,
-        colorScheme: ColorScheme.dark(primary: cAccent, surface: cSurface),
+        canvasColor: cBg,
+        cardColor: cSurface,
+        dialogBackgroundColor: cSurface,
+        dividerColor: cBorder,
+        colorScheme: ColorScheme.dark(
+          primary: cAccent,
+          secondary: cAccent,
+          surface: cSurface,
+          onSurface: cText,
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(backgroundColor: cSurface),
+        chipTheme: ChipThemeData(
+          backgroundColor: cBg,
+          selectedColor: cAccent,
+          disabledColor: cBg,
+          side: BorderSide(color: cBorder),
+          labelStyle: TextStyle(color: cText),
+          secondaryLabelStyle: TextStyle(color: Colors.white),
+          padding: EdgeInsets.symmetric(horizontal: 8),
+        ),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? Colors.white : cMuted,
+          ),
+          trackColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? cAccent : cBorder,
+          ),
+        ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: cBg,

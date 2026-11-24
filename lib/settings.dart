@@ -67,13 +67,11 @@ class IndCfg {
 }
 
 Map<String, IndCfg> _defaultIndicators() => {
-  'rsi': IndCfg(true, {'period': 14, 'ob': 70, 'os': 30}),
   'macd': IndCfg(true, {'fast': 12, 'slow': 26, 'sig': 9}),
   'stoch': IndCfg(false, {'k': 14, 'd': 3, 'smooth': 3}),
   'atr': IndCfg(false, {'period': 14}),
   'obv': IndCfg(false, {'sma': 20}),
-  'rsisma': IndCfg(false, {'period': 14, 'sma': 9, 'hi': 70, 'lo': 40}),
-  'roc': IndCfg(false, {'period': 9}),
+  'rsisma': IndCfg(true, {'period': 14, 'sma': 9, 'hi': 70, 'lo': 40}),
   'rocma': IndCfg(false, {'period': 9, 'sma': 14}),
   'adx': IndCfg(false, {'period': 14}),
   'cci': IndCfg(false, {'period': 20}),
@@ -92,13 +90,11 @@ Map<String, IndCfg> _defaultOverlays() => {
 };
 
 const defaultPaneOrder = [
-  'rsi',
   'rsisma',
   'macd',
   'stoch',
   'atr',
   'obv',
-  'roc',
   'rocma',
   'adx',
   'cci',
