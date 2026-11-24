@@ -16,6 +16,7 @@ const _paneLineLabels = {
   'atr': ['ATR'],
   'obv': ['OBV', 'SMA'],
   'roc': ['ROC'],
+  'rocma': ['ROC', 'MA'],
   'adx': ['ADX', '+DI', '-DI'],
   'cci': ['CCI'],
   'wpr': ['%R'],
