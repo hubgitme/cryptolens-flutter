@@ -232,28 +232,6 @@ class _HomePageState extends State<HomePage> {
     final paneKeys = <String>[];
     final ind = s.indicators;
     int pi(String k, String p, int def) => ind[k]!.p(p, def).toInt();
-    if (ind['rsi']!.on) {
-      paneKeys.add('rsi');
-      final p = pi('rsi', 'period', 14);
-      panes.add(
-        PaneSpec(
-          'rsi',
-          'RSI ($p)',
-          [
-            LineSeries(
-              calcRSI(closes, p),
-              lc(ind['rsi']!, 0, Color(0xFFFFC107)),
-              width: ind['rsi']!.width,
-            ),
-          ],
-          range: (0, 100),
-          hlines: [
-            ind['rsi']!.p('ob', 70).toDouble(),
-            ind['rsi']!.p('os', 30).toDouble(),
-          ],
-        ),
-      );
-    }
     if (ind['rsisma']!.on) {
       paneKeys.add('rsisma');
       final p = pi('rsisma', 'period', 14), sm = pi('rsisma', 'sma', 9);
@@ -366,24 +344,6 @@ class _HomePageState extends State<HomePage> {
             width: ind['obv']!.width,
           ),
         ]),
-      );
-    }
-    if (ind['roc']!.on) {
-      paneKeys.add('roc');
-      final p = pi('roc', 'period', 9);
-      panes.add(
-        PaneSpec(
-          'roc',
-          'ROC ($p)',
-          [
-            LineSeries(
-              calcROC(closes, p),
-              lc(ind['roc']!, 0, Color(0xFFA855F7)),
-              width: ind['roc']!.width,
-            ),
-          ],
-          hlines: [0],
-        ),
       );
     }
     if (ind['rocma']!.on) {

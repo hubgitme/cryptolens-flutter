@@ -12,13 +12,11 @@ const _defColors = {
   'vwap': 0xFF14B8A6,
   'alligator': 0xFF2962FF,
   'volume': 0xFF9CA3AF,
-  'rsi': 0xFFFFC107,
   'rsisma': 0xFFFFC107,
   'macd': 0xFF2962FF,
   'stoch': 0xFF2962FF,
   'atr': 0xFFFFC107,
   'obv': 0xFF2962FF,
-  'roc': 0xFFA855F7,
   'rocma': 0xFFA855F7,
   'adx': 0xFFF59E0B,
   'cci': 0xFF2962FF,
@@ -35,13 +33,11 @@ const _defLineColors = {
   'vwap': [0xFF14B8A6],
   'alligator': [0xFF2962FF, 0xFFEF5350, 0xFF26A69A],
   'volume': [0xFF9CA3AF],
-  'rsi': [0xFFFFC107],
   'rsisma': [0xFFFFC107, 0xFF3B82F6],
   'macd': [0xFF2962FF, 0xFFFF6D00],
   'stoch': [0xFF2962FF, 0xFFFF6D00],
   'atr': [0xFFFFC107],
   'obv': [0xFF2962FF, 0xFFFF6D00],
-  'roc': [0xFFA855F7],
   'rocma': [0xFFA855F7, 0xFFFF6D00],
   'adx': [0xFFF59E0B, 0xFF26A69A, 0xFFEF5350],
   'cci': [0xFF2962FF],
@@ -58,13 +54,11 @@ const _lineLabels = {
   'vwap': ['VWAP'],
   'alligator': ['Jaw', 'Teeth', 'Lips'],
   'volume': ['Vol'],
-  'rsi': ['RSI'],
   'rsisma': ['RSI', 'SMA'],
   'macd': ['MACD', 'Signal'],
   'stoch': ['%K', '%D'],
   'atr': ['ATR'],
   'obv': ['OBV', 'SMA'],
-  'roc': ['ROC'],
   'rocma': ['ROC', 'MA'],
   'adx': ['ADX', '+DI', '-DI'],
   'cci': ['CCI'],
@@ -74,13 +68,11 @@ const _lineLabels = {
 };
 
 const _paneTitles = {
-  'rsi': 'RSI',
   'rsisma': 'RSI+SMA',
   'macd': 'MACD',
   'stoch': 'Stochastic',
   'atr': 'ATR',
   'obv': 'OBV+SMA',
-  'roc': 'ROC',
   'rocma': 'ROC+MA',
   'adx': 'ADX',
   'cci': 'CCI',
@@ -144,12 +136,6 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
           _numField(cfg, 'jaw', 'فک'),
           _numField(cfg, 'teeth', 'دندان'),
           _numField(cfg, 'lips', 'لب'),
-        ];
-      case 'rsi':
-        return [
-          _numField(cfg, 'period', 'دوره'),
-          _numField(cfg, 'ob', 'اشباع خرید', max: 100),
-          _numField(cfg, 'os', 'اشباع فروش', max: 100),
         ];
       case 'rsisma':
         return [
@@ -215,11 +201,13 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
   }) {
     final s = widget.settings;
     final labels = _lineLabels[key] ?? const [''];
+    final fields = _fieldsFor(key, cfg);
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ردیف اول: عنوان + فعال‌سازی (+ جابه‌جایی پنل)
           Row(
             children: [
               Switch(
@@ -230,8 +218,7 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                   setState(() {});
                 },
               ),
-              SizedBox(
-                width: 86,
+              Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
@@ -241,59 +228,6 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                   ),
                 ),
               ),
-              // رنگ جداگانه هر خط
-              for (var i = 0; i < labels.length; i++)
-                Padding(
-                  padding: EdgeInsets.only(left: i == 0 ? 0 : 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () async {
-                          final cur = Color(_lineColorAt(cfg, key, i));
-                          final picked = await showColorPalette(context, cur);
-                          if (picked != null) {
-                            _setLineColor(cfg, key, i, picked.toARGB32());
-                            widget.onChanged();
-                            setState(() {});
-                          }
-                        },
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: Color(_lineColorAt(cfg, key, i)),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: cBorder),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 3),
-                      Text(
-                        labels[i],
-                        style: TextStyle(color: cMuted, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-              SizedBox(width: 8),
-              DropdownButton<double>(
-                value: _nearestWidth(cfg.width),
-                dropdownColor: cSurface,
-                isDense: true,
-                items: [
-                  for (final w in _widthOptions)
-                    DropdownMenuItem(value: w, child: Text('ضخامت $w')),
-                ],
-                onChanged: (v) {
-                  if (v != null) {
-                    cfg.width = v;
-                    widget.onChanged();
-                    setState(() {});
-                  }
-                },
-              ),
-              Spacer(),
               if (isPane) ...[
                 IconButton(
                   icon: Icon(Icons.arrow_upward, size: 18, color: cText),
@@ -327,15 +261,65 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
               ],
             ],
           ),
-          if (_fieldsFor(key, cfg).isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(right: 52, top: 2),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: _fieldsFor(key, cfg),
-              ),
+          // ردیف دوم: رنگ خط‌ها + ضخامت + پارامترها
+          Padding(
+            padding: EdgeInsets.only(right: 52),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (var i = 0; i < labels.length; i++)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          final cur = Color(_lineColorAt(cfg, key, i));
+                          final picked = await showColorPalette(context, cur);
+                          if (picked != null) {
+                            _setLineColor(cfg, key, i, picked.toARGB32());
+                            widget.onChanged();
+                            setState(() {});
+                          }
+                        },
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: Color(_lineColorAt(cfg, key, i)),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: cBorder),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      Text(
+                        labels[i],
+                        style: TextStyle(color: cMuted, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                DropdownButton<double>(
+                  value: _nearestWidth(cfg.width),
+                  dropdownColor: cSurface,
+                  isDense: true,
+                  items: [
+                    for (final w in _widthOptions)
+                      DropdownMenuItem(value: w, child: Text('ضخامت $w')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      cfg.width = v;
+                      widget.onChanged();
+                      setState(() {});
+                    }
+                  },
+                ),
+                ...fields,
+              ],
             ),
+          ),
         ],
       ),
     );
