@@ -45,7 +45,7 @@ jobs:
               assert m, 'compileOptions block not found'
               s = s[:m.end()] + '\n        isCoreLibraryDesugaringEnabled = true' + s[m.end():]
           if 'desugar_jdk_libs' not in s:
-              dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")'
+              dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
               if 'dependencies {' in s:
                   s = s.replace('dependencies {', 'dependencies {\n    ' + dep, 1)
               else:
