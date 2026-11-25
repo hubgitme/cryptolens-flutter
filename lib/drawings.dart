@@ -15,6 +15,7 @@ const drawPointCount = {
   'ewc': 4,
   'long': 3,
   'short': 3,
+  'range': 2,
 };
 const drawLabels = {
   'ewi': ['0', '1', '2', '3', '4', '5'],
@@ -28,6 +29,7 @@ const drawHints = {
   'ewc': 'الیوت ABC',
   'long': 'پوزیشن خرید (ورود، حد سود، حد ضرر)',
   'short': 'پوزیشن فروش (ورود، حد سود، حد ضرر)',
+  'range': 'بازه قیمت (تغییر، درصد، تعداد کندل)',
 };
 const fibColors = [
   0xFF9CA3AF,
