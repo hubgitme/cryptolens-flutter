@@ -981,6 +981,17 @@ class _PricePainter extends CustomPainter {
         Offset(x(selected!), size.height),
         p,
       );
+      // خط افقی کراس‌هیر روی قیمت بسته‌شدن کندل انتخاب‌شده + نقطه‌ی تقاطع (+)
+      final cy = y(candles[selected!].close);
+      _dashedLine(
+        canvas,
+        Offset(0, cy),
+        Offset(plotW, cy),
+        Paint()
+          ..color = cMuted.withValues(alpha: 0.7)
+          ..strokeWidth = 1,
+      );
+      canvas.drawCircle(Offset(x(selected!), cy), 3.5, Paint()..color = cMuted);
     }
     canvas.drawLine(
       Offset(plotW, 0),
@@ -1064,6 +1075,9 @@ class _PricePainter extends CustomPainter {
       }
       if (v != null && v.isFinite) addChip(v, s.color);
     }
+    if (selected != null && selected! >= 0 && selected! < candles.length) {
+      addChip(candles[selected!].close, cMuted);
+    }
     addChip(lastPrice, lastColor);
     chips.removeWhere((c) => c.$1 < -9 || c.$1 > height + 9);
     chips.sort((a, b) => a.$1.compareTo(b.$1));
@@ -1072,9 +1086,34 @@ class _PricePainter extends CustomPainter {
         chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
       }
     }
+    if (chips.isNotEmpty && chips.last.$1 > height - 9) {
+      // اگر پایین‌ترین برچسب از پنل بیرون زد، کل دسته را بالا می‌کشیم
+      final shift = chips.last.$1 - (height - 9);
+      for (var i = 0; i < chips.length; i++) {
+        chips[i] = (chips[i].$1 - shift, chips[i].$2, chips[i].$3);
+      }
+      if (chips.first.$1 < -9) {
+        chips[0] = (-9, chips[0].$2, chips[0].$3);
+        for (var i = 1; i < chips.length; i++) {
+          if (chips[i].$1 - chips[i - 1].$1 < 18) {
+            chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
+          }
+        }
+      }
+    }
+    chips.removeWhere((c) => c.$1 < -9 || c.$1 > height + 9);
     for (final (cy, txt, col) in chips) {
+      // عرض برچسب به اندازه‌ی متن است (به راست چسبیده)؛ قیمت بلند به‌جای بریده‌شدن به چپ کشیده می‌شود
+      final tp = TextPainter(
+        text: TextSpan(
+          text: txt,
+          style: const TextStyle(color: Colors.white, fontSize: 9),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final w = math.max(axisW - 2, tp.width + 10);
       canvas.drawRect(
-        Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
+        Rect.fromLTWH(plotW + axisW - 1 - w, cy - 9, w, 18),
         Paint()..color = col,
       );
       _text(
@@ -1472,9 +1511,32 @@ class _PanePainter extends CustomPainter {
         chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
       }
     }
+    if (chips.isNotEmpty && chips.last.$1 > size.height - 9) {
+      final shift = chips.last.$1 - (size.height - 9);
+      for (var i = 0; i < chips.length; i++) {
+        chips[i] = (chips[i].$1 - shift, chips[i].$2, chips[i].$3);
+      }
+      if (chips.first.$1 < -9) {
+        chips[0] = (-9, chips[0].$2, chips[0].$3);
+        for (var i = 1; i < chips.length; i++) {
+          if (chips[i].$1 - chips[i - 1].$1 < 18) {
+            chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
+          }
+        }
+      }
+    }
+    chips.removeWhere((c) => c.$1 < -9 || c.$1 > size.height + 9);
     for (final (cy, txt, col) in chips) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: txt,
+          style: const TextStyle(color: Colors.white, fontSize: 9),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final w = math.max(axisW - 2, tp.width + 10);
       canvas.drawRect(
-        Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
+        Rect.fromLTWH(plotW + axisW - 1 - w, cy - 9, w, 18),
         Paint()..color = col,
       );
       _text(
@@ -1495,6 +1557,25 @@ class _PanePainter extends CustomPainter {
         Offset(x(selected!), size.height),
         p,
       );
+      // خط افقی کراس‌هیر روی مقدار خط اول پنل + نقطه‌ی تقاطع (+)
+      final v0 = pane.lines.isNotEmpty
+          ? _lineValue(pane.lines[0].values, selected)
+          : null;
+      if (v0 != null && v0.isFinite && v0 >= lo && v0 <= hi) {
+        _dashedLine(
+          canvas,
+          Offset(0, y(v0)),
+          Offset(plotW, y(v0)),
+          Paint()
+            ..color = cMuted.withValues(alpha: 0.7)
+            ..strokeWidth = 1,
+        );
+        canvas.drawCircle(
+          Offset(x(selected!), y(v0)),
+          3.5,
+          Paint()..color = cMuted,
+        );
+      }
     }
     canvas.drawLine(
       Offset(plotW, 0),
