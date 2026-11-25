@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../alert_service.dart';
 import '../binance.dart';
 import '../chart/chart_widget.dart';
 import '../drawings.dart';
@@ -11,6 +12,7 @@ import '../indicators.dart';
 import '../models.dart';
 import '../settings.dart';
 import '../theme.dart';
+import 'alerts_page.dart';
 import 'indicator_sheet.dart';
 import 'watchlist_drawer.dart';
 
@@ -76,6 +78,30 @@ class _HomePageState extends State<HomePage> {
       );
   }
 
+  Future<void> _openAlerts() async {
+    await showAlertsPage(context, s.symbol);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _checkAlertsForeground() async {
+    if (_candles.isEmpty || !mounted) return;
+    try {
+      final fired = await AlertService.checkForeground(
+        s.symbol,
+        s.iv,
+        _candles,
+      );
+      if (fired.isNotEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(fired.map((f) => f.message).join('\n')),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
   void _saveAndRefresh() {
     SettingsStore.save(s);
     _restartTimer();
@@ -101,6 +127,7 @@ class _HomePageState extends State<HomePage> {
         _version++;
         _status = 'آخرین بروزرسانی ${fmtClock(DateTime.now())}';
       });
+      _checkAlertsForeground();
     } catch (e) {
       if (mounted) setState(() => _status = '❌ $e');
     } finally {
@@ -118,6 +145,7 @@ class _HomePageState extends State<HomePage> {
         _version++;
         _status = 'آخرین بروزرسانی ${fmtClock(DateTime.now())}';
       });
+      _checkAlertsForeground();
     } catch (_) {}
   }
 
@@ -782,6 +810,11 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.notifications_none, color: cText),
+            tooltip: 'هشدارها و آلارم‌ها',
+            onPressed: _openAlerts,
+          ),
           IconButton(
             icon: Icon(Icons.show_chart, color: cText),
             tooltip: 'اندیکاتورها و تنظیمات',
