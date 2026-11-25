@@ -341,6 +341,14 @@ class _ChartViewState extends State<ChartView> {
         }
         continue;
       }
+      if (d.type == 'range') {
+        final x0 = math.min(p[0].dx, p[1].dx) - r,
+            x1 = math.max(p[0].dx, p[1].dx) + r;
+        final y0 = math.min(p[0].dy, p[1].dy) - r,
+            y1 = math.max(p[0].dy, p[1].dy) + r;
+        if (x >= x0 && x <= x1 && py >= y0 && py <= y1) return d.id;
+        continue;
+      }
       for (var i = 0; i < p.length - 1; i++) {
         if (_distSeg(x, py, p[i], p[i + 1]) < r) return d.id;
       }
@@ -1117,6 +1125,53 @@ class _PricePainter extends CustomPainter {
       );
     } else if (p.length < 2) {
       canvas.drawCircle(p[0], 4, Paint()..color = c);
+    } else if (d.type == 'range') {
+      // بازه قیمت تریدینگ‌ویو: کادر بین دو نقطه + تغییر، درصد و تعداد کندل
+      final x0 = math.min(p[0].dx, p[1].dx), x1 = math.max(p[0].dx, p[1].dx);
+      final y0 = math.min(p[0].dy, p[1].dy), y1 = math.max(p[0].dy, p[1].dy);
+      canvas.drawRect(
+        Rect.fromLTRB(x0, y0, x1, y1),
+        Paint()..color = c.withValues(alpha: 0.12 * alpha),
+      );
+      canvas.drawRect(Rect.fromLTRB(x0, y0, x1, y1), line(c, sw));
+      final diff = d.pts[1].p - d.pts[0].p;
+      final pct = d.pts[0].p == 0 ? 0.0 : diff / d.pts[0].p * 100;
+      final bars = ((d.pts[1].t - d.pts[0].t).abs() / ivSec).round() + 1;
+      final diffTxt = '${diff >= 0 ? '+' : '-'}${fmtPrice(diff.abs())}';
+      final pctTxt = '${pct >= 0 ? '+' : ''}${pct.toStringAsFixed(2)}٪';
+      final lbl = '$diffTxt ($pctTxt) · $bars کندل';
+      final tp = TextPainter(
+        text: TextSpan(
+          text: lbl,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final boxW = tp.width + 12, boxH = 20.0;
+      final bx = ((x0 + x1) / 2 - boxW / 2).clamp(4.0, plotW - boxW - 4);
+      final by = (y0 + 4).clamp(4.0, height - boxH - 4);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(bx, by, boxW, boxH),
+          const Radius.circular(4),
+        ),
+        Paint()..color = cBg.withValues(alpha: 0.92 * alpha),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(bx, by, boxW, boxH),
+          const Radius.circular(4),
+        ),
+        line(c, 1),
+      );
+      tp.paint(canvas, Offset(bx + 6, by + 4));
+      for (final q in p) {
+        canvas.drawCircle(q, 4, Paint()..color = c);
+      }
     } else if (d.type == 'trend') {
       canvas.drawLine(p[0], p[1], line(c, sw));
     } else if (d.type == 'fib') {
