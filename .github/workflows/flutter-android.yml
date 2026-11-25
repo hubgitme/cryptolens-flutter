@@ -28,17 +28,22 @@ jobs:
             sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml || \
             sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application|' android/app/src/main/AndroidManifest.xml
-          if grep -q 'minSdk = flutter.minSdkVersion' android/app/build.gradle.kts; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
-          fi
           python3 - <<'PY'
-          # flutter_local_notifications needs core library desugaring (java.time APIs)
+          # Patch scaffolded build.gradle.kts: minSdk 23 + core library
+          # desugaring (required by flutter_local_notifications).
+          # Regex-based: the template's Java version / formatting varies
+          # between Flutter releases, so do not match a literal version.
+          import re
           p = 'android/app/build.gradle.kts'
           s = open(p).read()
+          s2 = re.sub(r'minSdk\s*=\s*(flutter\.minSdkVersion|\d+)', 'minSdk = 23', s, count=1)
+          if s2 == s:
+              print('WARNING: minSdk pattern not found')
+          s = s2
           if 'isCoreLibraryDesugaringEnabled' not in s:
-              old = 'targetCompatibility = JavaVersion.VERSION_11'
-              assert old in s, 'compileOptions pattern not found'
-              s = s.replace(old, old + '\n        isCoreLibraryDesugaringEnabled = true', 1)
+              m = re.search(r'compileOptions\s*\{', s)
+              assert m, 'compileOptions block not found'
+              s = s[:m.end()] + '\n        isCoreLibraryDesugaringEnabled = true' + s[m.end():]
           if 'desugar_jdk_libs' not in s:
               dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")'
               if 'dependencies {' in s:
@@ -46,7 +51,7 @@ jobs:
               else:
                   s += '\ndependencies {\n    ' + dep + '\n}\n'
           open(p, 'w').write(s)
-          print('desugaring enabled')
+          print('gradle patched')
           PY
 
       - name: Get packages
