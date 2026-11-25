@@ -48,6 +48,21 @@ void main() {
     }
   });
 
+  test('priceAbove fires immediately when already above the level', () {
+    // رگرسیون باگ گزارش‌شده: هشدار ساخته‌شده وقتی قیمت همین حالا هم
+    // بالاتر از سطح است باید در اولین چک زنگ بزند، نه فقط لحظه عبور.
+    final r = rule('priceAbove', level: 100);
+    const key = 'BTCUSDT|1h';
+    final fired = evaluateAll(
+      [r],
+      {
+        key: candles([101, 102, 103]),
+      },
+    );
+    expect(fired.length, 1);
+    expect(r.armed, isFalse);
+  });
+
   test('priceAbove fires once and re-arms after dipping below', () {
     final r = rule('priceAbove', level: 100);
     const key = 'BTCUSDT|1h';
@@ -92,18 +107,16 @@ void main() {
     expect(evaluateRule(r, candles([102, 101, 100.5])).hit, isFalse);
   });
 
-  test('rsiAbove fires when RSI crosses the level at the last candle', () {
-    // نزول بعد صعود: RSI از پایین بالا می‌آید و در آخرین کندل از ۷۰ می‌گذرد
+  test('rsiAbove fires when RSI is above the level at the last candle', () {
+    // نزول بعد صعود: RSI بالا می‌آید؛ همین که آخرین مقدار بالای ۷۰ باشد
+    // کافی است، لازم نیست عبور دقیقاً در آخرین کندل رخ داده باشد.
     final down = [for (var i = 0; i < 20; i++) 100.0 - i];
     var found = false;
     for (var k = 1; k <= 30; k++) {
       final closes = [...down, for (var j = 1; j <= k; j++) 81.0 + j];
       final rsi = calcRSI(closes);
       final n = closes.length;
-      if (rsi[n - 2] != null &&
-          rsi[n - 1] != null &&
-          rsi[n - 2]! <= 70 &&
-          rsi[n - 1]! > 70) {
+      if (rsi[n - 1] != null && rsi[n - 1]! > 70) {
         expect(
           evaluateRule(rule('rsiAbove', level: 70), candles(closes)).hit,
           isTrue,
@@ -115,18 +128,15 @@ void main() {
     expect(found, isTrue);
   });
 
-  test('macdCrossUp fires exactly at the last candle', () {
+  test('macdCrossUp fires when MACD line is above the signal line', () {
     final base = [for (var i = 0; i < 40; i++) 100 - i.toDouble()];
     var found = false;
     for (var k = 1; k <= 20; k++) {
       final closes = [...base, for (var j = 1; j <= k; j++) 61 + j * 3.0];
       final m = calcMACD(closes);
       final n = closes.length;
-      if (m.ml[n - 2] != null &&
-          m.sl[n - 2] != null &&
-          m.ml[n - 1] != null &&
+      if (m.ml[n - 1] != null &&
           m.sl[n - 1] != null &&
-          m.ml[n - 2]! <= m.sl[n - 2]! &&
           m.ml[n - 1]! > m.sl[n - 1]!) {
         expect(evaluateRule(rule('macdCrossUp'), candles(closes)).hit, isTrue);
         found = true;
@@ -136,25 +146,28 @@ void main() {
     expect(found, isTrue);
   });
 
-  test('emaCrossUp fires exactly at the last candle', () {
+  test('emaCrossUp fires when fast EMA is above slow EMA', () {
     final base = [for (var i = 0; i < 40; i++) 100 - i.toDouble()];
     var found = false;
     for (var k = 1; k <= 20; k++) {
       final closes = [...base, for (var j = 1; j <= k; j++) 61 + j * 3.0];
       final f = calcEMA(closes, 9), s = calcEMA(closes, 21);
       final n = closes.length;
-      if (f[n - 2] != null &&
-          s[n - 2] != null &&
-          f[n - 1] != null &&
-          s[n - 1] != null &&
-          f[n - 2]! <= s[n - 2]! &&
-          f[n - 1]! > s[n - 1]!) {
+      if (f[n - 1] != null && s[n - 1] != null && f[n - 1]! > s[n - 1]!) {
         expect(evaluateRule(rule('emaCrossUp'), candles(closes)).hit, isTrue);
         found = true;
         break;
       }
     }
     expect(found, isTrue);
+  });
+
+  test('cross kind fires even when the cross happened long ago', () {
+    // رگرسیون: کراسی که چند کندل قبل رخ داده هم باید زنگ بزند — وضعیت
+    // فعلی مهم است، نه فقط عبور بین دو کندل آخر.
+    final rising = [for (var i = 0; i < 60; i++) 50.0 + i * 2];
+    expect(evaluateRule(rule('emaCrossUp'), candles(rising)).hit, isTrue);
+    expect(evaluateRule(rule('emaCrossDown'), candles(rising)).hit, isFalse);
   });
 
   test('smaCrossUp fires on price crossing SMA20', () {
