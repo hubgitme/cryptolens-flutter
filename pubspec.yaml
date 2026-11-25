@@ -15,6 +15,12 @@ dependencies:
   flutter_local_notifications: ^19.0.0
   workmanager: ^0.9.0
 
+# workmanager_android 0.9.0+3 تا 0.9.3 روی AGP 9 پلاگین Kotlin را رد می‌کنند
+# و کلاس WorkmanagerPlugin ساخته نمی‌شود (خطای cannot find symbol در CI)؛
+# پس نسخه 0.9.0+2 را پین می‌کنیم تا وقتی به workmanager 0.10.x رفتیم.
+dependency_overrides:
+  workmanager_android: 0.9.0+2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
