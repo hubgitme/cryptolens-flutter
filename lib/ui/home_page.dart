@@ -620,6 +620,11 @@ class _HomePageState extends State<HomePage> {
               _toolTextBtn('ewc', 'ABC', 'الیوت ABC'),
               _toolTextBtn('long', 'خرید', 'پوزیشن خرید (سود/زیان)'),
               _toolTextBtn('short', 'فروش', 'پوزیشن فروش (سود/زیان)'),
+              _toolTextBtn(
+                'range',
+                'بازه',
+                'بازه قیمت (تغییر، درصد، تعداد کندل)',
+              ),
               IconButton(
                 icon: Icon(
                   Icons.gps_fixed,
