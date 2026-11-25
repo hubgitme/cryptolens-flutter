@@ -45,10 +45,7 @@ class AlertService {
     await _plugin.initialize(
       const InitializationSettings(android: androidInit),
     );
-    await Workmanager().initialize(
-      alertCallbackDispatcher,
-      isInDebugMode: false,
-    );
+    await Workmanager().initialize(alertCallbackDispatcher);
     await syncBackgroundTask();
   }
 
