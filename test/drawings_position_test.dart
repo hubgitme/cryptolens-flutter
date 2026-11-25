@@ -32,4 +32,30 @@ void main() {
     });
     expect(bad, isNull);
   });
+  test('range needs 2 points', () {
+    expect(drawPointCount['range'], 2);
+    expect(drawHints['range'], isNotNull);
+  });
+
+  test('range json roundtrip', () {
+    final d = Drawing(
+      id: 'r1',
+      type: 'range',
+      color: 0xFFF59E0B,
+      pts: [DrawPt(1000, 10.0), DrawPt(2000, 11.0)],
+    );
+    final back = Drawing.fromJson(d.toJson())!;
+    expect(back.type, 'range');
+    expect(back.pts.length, 2);
+    // بازه‌ی ۱ نقطه‌ای رد می‌شود
+    final bad = Drawing.fromJson({
+      'id': 'r2',
+      'type': 'range',
+      'color': 0xFFF59E0B,
+      'pts': [
+        {'t': 1000, 'p': 10.0},
+      ],
+    });
+    expect(bad, isNull);
+  });
 }
