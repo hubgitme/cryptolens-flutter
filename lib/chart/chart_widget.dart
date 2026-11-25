@@ -949,31 +949,19 @@ class _PricePainter extends CustomPainter {
       canvas.drawPath(path, p);
     }
 
-    _drawDrawings(canvas, plotW, y, cw, size.height);
-    _drawAxisChips(canvas, plotW, y, size.height);
-
     final last = candles.last;
+    final lastCol = last.close >= last.open ? cGreen : cRed;
+    _drawDrawings(canvas, plotW, y, cw, size.height);
+    // همه برچسب‌های محور (رسم‌ها + خط‌های روی قیمت + قیمت آخر) در یک پاس، بدون هم‌پوشانی
+    _drawAxisChips(canvas, plotW, y, size.height, last.close, lastCol);
     final lp = Paint()
-      ..color = (last.close >= last.open ? cGreen : cRed).withValues(alpha: 0.7)
+      ..color = lastCol.withValues(alpha: 0.7)
       ..strokeWidth = 1;
     _dashedLine(
       canvas,
       Offset(0, y(last.close)),
       Offset(plotW, y(last.close)),
       lp,
-    );
-    final chip = Rect.fromLTWH(plotW + 1, y(last.close) - 9, axisW - 2, 18);
-    canvas.drawRect(
-      chip,
-      Paint()..color = last.close >= last.open ? cGreen : cRed,
-    );
-    _text(
-      canvas,
-      fmtPrice(last.close),
-      Offset(size.width - 4, y(last.close) - 6),
-      Colors.white,
-      10,
-      align: TextAlign.right,
     );
 
     if (selected != null && selected! >= 0 && selected! < candles.length) {
@@ -1019,6 +1007,8 @@ class _PricePainter extends CustomPainter {
     double plotW,
     double Function(double) y,
     double height,
+    double lastPrice,
+    Color lastColor,
   ) {
     final chips = <(double, String, Color)>[];
     void addChip(double price, Color col) {
@@ -1048,6 +1038,25 @@ class _PricePainter extends CustomPainter {
         }
       }
     }
+    // خط‌های روی قیمت (SMA، EMA، باندهای بولینگر، VWAP، Alligator):
+    // مقدار کندل انتخاب‌شده، وگرنه آخرین مقدار
+    for (final s in overlays) {
+      double? v;
+      if (selected != null && selected! >= 0) {
+        final j = selected! - s.shift;
+        if (j >= 0 && j < s.values.length) v = s.values[j];
+      }
+      if (v == null) {
+        for (var i = s.values.length - 1; i >= 0; i--) {
+          if (s.values[i] != null) {
+            v = s.values[i];
+            break;
+          }
+        }
+      }
+      if (v != null && v.isFinite) addChip(v, s.color);
+    }
+    addChip(lastPrice, lastColor);
     chips.removeWhere((c) => c.$1 < -9 || c.$1 > height + 9);
     chips.sort((a, b) => a.$1.compareTo(b.$1));
     for (var i = 1; i < chips.length; i++) {
