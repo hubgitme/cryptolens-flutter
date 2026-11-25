@@ -97,19 +97,49 @@ class AlertService {
     } catch (_) {}
   }
 
-  /// چک پیش‌زمینه: فقط هشدارهایی که نماد و تایم‌فریم‌شان با چارت فعلی
-  /// یکی است، با کندل‌های همین چارت ارزیابی می‌شوند (بدون دانلود اضافه).
+  // کش کندل‌های تایم‌فریم‌های غیر از چارت فعلی (حداکثر ۶۰ ثانیه) تا با
+  // هر رفرش چارت دوباره دانلود نشوند.
+  static final _otherIntervalCache =
+      <String, ({List<Candle> candles, DateTime at})>{};
+
+  /// چک پیش‌زمینه: همه هشدارهای فعال همین نماد ارزیابی می‌شوند، در هر
+  /// تایم‌فریمی که باشند؛ تایم‌فریم چارت با کندل‌های همین چارت، بقیه با
+  /// یک دانلود (کش‌شده ۶۰ ثانیه). بدون دانلود اضافه برای تایم‌فریم چارت.
   static Future<List<FiredAlert>> checkForeground(
     String symbol,
     String interval,
     List<Candle> candles,
   ) async {
     final rules = await AlertsStore.load();
-    final mine = rules
-        .where((r) => r.enabled && r.symbol == symbol && r.interval == interval)
-        .toList();
+    final mine = rules.where((r) => r.enabled && r.symbol == symbol).toList();
     if (mine.isEmpty) return const [];
-    final fired = evaluateAll(mine, {'$symbol|$interval': candles});
+    String? apiBase;
+    try {
+      apiBase = (await SettingsStore.load()).apiBase;
+    } catch (_) {}
+    final byKey = <String, List<Candle>>{'$symbol|$interval': candles};
+    final now = DateTime.now();
+    for (final r in mine) {
+      if (r.interval == interval) continue;
+      final key = '${r.symbol}|${r.interval}';
+      if (byKey.containsKey(key)) continue;
+      final cached = _otherIntervalCache[key];
+      if (cached != null && now.difference(cached.at).inSeconds < 60) {
+        byKey[key] = cached.candles;
+        continue;
+      }
+      try {
+        final data = await fetchKlines(
+          r.symbol,
+          r.interval,
+          150,
+          customBase: apiBase,
+        );
+        byKey[key] = data;
+        _otherIntervalCache[key] = (candles: data, at: now);
+      } catch (_) {}
+    }
+    final fired = evaluateAll(mine, byKey);
     for (final f in fired) {
       try {
         await showAlert(
