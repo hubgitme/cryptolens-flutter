@@ -31,6 +31,23 @@ jobs:
           if grep -q 'minSdk = flutter.minSdkVersion' android/app/build.gradle.kts; then
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' android/app/build.gradle.kts
           fi
+          python3 - <<'PY'
+          # flutter_local_notifications needs core library desugaring (java.time APIs)
+          p = 'android/app/build.gradle.kts'
+          s = open(p).read()
+          if 'isCoreLibraryDesugaringEnabled' not in s:
+              old = 'targetCompatibility = JavaVersion.VERSION_11'
+              assert old in s, 'compileOptions pattern not found'
+              s = s.replace(old, old + '\n        isCoreLibraryDesugaringEnabled = true', 1)
+          if 'desugar_jdk_libs' not in s:
+              dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")'
+              if 'dependencies {' in s:
+                  s = s.replace('dependencies {', 'dependencies {\n    ' + dep, 1)
+              else:
+                  s += '\ndependencies {\n    ' + dep + '\n}\n'
+          open(p, 'w').write(s)
+          print('desugaring enabled')
+          PY
 
       - name: Get packages
         run: flutter pub get
