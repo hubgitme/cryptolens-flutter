@@ -7,7 +7,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'settings.dart' show symbolRe;
 
-const drawPointCount = {'trend': 2, 'hline': 1, 'fib': 2, 'ewi': 6, 'ewc': 4};
+const drawPointCount = {
+  'trend': 2,
+  'hline': 1,
+  'fib': 2,
+  'ewi': 6,
+  'ewc': 4,
+  'long': 3,
+  'short': 3,
+};
 const drawLabels = {
   'ewi': ['0', '1', '2', '3', '4', '5'],
   'ewc': ['0', 'A', 'B', 'C'],
@@ -18,6 +26,8 @@ const drawHints = {
   'fib': 'فیبوناچی (شروع، پایان)',
   'ewi': 'الیوت ۱-۵',
   'ewc': 'الیوت ABC',
+  'long': 'پوزیشن خرید (ورود، حد سود، حد ضرر)',
+  'short': 'پوزیشن فروش (ورود، حد سود، حد ضرر)',
 };
 const fibColors = [
   0xFF9CA3AF,
@@ -83,7 +93,10 @@ class Drawing {
       }
       if (pts.length >= drawPointCount[type]!) break;
     }
-    if (pts.length < (type == 'hline' ? 1 : 2)) return null;
+    final minPts = type == 'hline'
+        ? 1
+        : (type == 'long' || type == 'short' ? 3 : 2);
+    if (pts.length < minPts) return null;
     final c = j['color'];
     return Drawing(
       id: j['id'] is String ? j['id'] as String : newDrawId(),
