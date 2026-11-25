@@ -1,12 +1,16 @@
 // کریپتو لنز — نسخه نیتیو Flutter (بدون WebView)
 import 'package:flutter/material.dart';
 
+import 'alert_service.dart';
 import 'settings.dart';
 import 'theme.dart';
 import 'ui/home_page.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await AlertService.init();
+  } catch (_) {}
   runApp(const CryptoLensApp());
 }
 
