@@ -618,6 +618,8 @@ class _HomePageState extends State<HomePage> {
               _toolTextBtn('fib', 'Fib', 'فیبوناچی'),
               _toolTextBtn('ewi', '1-5', 'الیوت ۱-۵'),
               _toolTextBtn('ewc', 'ABC', 'الیوت ABC'),
+              _toolTextBtn('long', 'خرید', 'پوزیشن خرید (سود/زیان)'),
+              _toolTextBtn('short', 'فروش', 'پوزیشن فروش (سود/زیان)'),
               IconButton(
                 icon: Icon(
                   Icons.gps_fixed,
