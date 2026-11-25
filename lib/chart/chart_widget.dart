@@ -332,6 +332,15 @@ class _ChartViewState extends State<ChartView> {
         if ((p[0].dy - py).abs() < r) return d.id;
         continue;
       }
+      if (d.type == 'long' || d.type == 'short') {
+        // خط‌های افقی ورود/هدف/ضرر در بازه ورود تا لبه راست
+        if (x >= p[0].dx - r && x <= _plotW) {
+          for (final q in p) {
+            if ((q.dy - py).abs() < r) return d.id;
+          }
+        }
+        continue;
+      }
       for (var i = 0; i < p.length - 1; i++) {
         if (_distSeg(x, py, p[i], p[i + 1]) < r) return d.id;
       }
@@ -365,7 +374,10 @@ class _ChartViewState extends State<ChartView> {
   }
 
   void _finishDraft() {
-    if (_draft.length >= (widget.tool == 'hline' ? 1 : 2)) {
+    final need = (widget.tool == 'ewi' || widget.tool == 'ewc')
+        ? 2
+        : (drawPointCount[widget.tool] ?? 2);
+    if (_draft.length >= need) {
       _commitDraft();
     } else {
       _draft = [];
@@ -937,7 +949,8 @@ class _PricePainter extends CustomPainter {
       canvas.drawPath(path, p);
     }
 
-    _drawDrawings(canvas, plotW, y, cw);
+    _drawDrawings(canvas, plotW, y, cw, size.height);
+    _drawAxisChips(canvas, plotW, y, size.height);
 
     final last = candles.last;
     final lp = Paint()
@@ -985,6 +998,7 @@ class _PricePainter extends CustomPainter {
     double plotW,
     double Function(double) y,
     double cw,
+    double height,
   ) {
     if (candles.isEmpty) return;
     double xT(int t) => ((t - candles[0].time) / ivSec - start + 0.5) * cw;
@@ -995,7 +1009,65 @@ class _PricePainter extends CustomPainter {
       );
     }
     for (final d in list) {
-      _drawOne(canvas, d, plotW, y, xT, d.id == selectedDrawingId);
+      _drawOne(canvas, d, plotW, y, xT, d.id == selectedDrawingId, height);
+    }
+  }
+
+  // برچسب قیمت رسم‌ها روی محور کنار قیمت (مثل تریدینگ‌ویو)
+  void _drawAxisChips(
+    Canvas canvas,
+    double plotW,
+    double Function(double) y,
+    double height,
+  ) {
+    final chips = <(double, String, Color)>[];
+    void addChip(double price, Color col) {
+      final cy = y(price);
+      if (cy.isFinite) chips.add((cy, fmtPrice(price), col));
+    }
+
+    final list = <Drawing>[...drawings];
+    if (draftPts.isNotEmpty && draftType != 'cursor') {
+      list.add(
+        Drawing(id: '_draft', type: draftType, color: drawColor, pts: draftPts),
+      );
+    }
+    for (final d in list) {
+      if (d.type == 'fib' && d.pts.length >= 2) {
+        for (var i = 0; i < fibLevels.length; i++) {
+          final price = d.pts[1].p + (d.pts[0].p - d.pts[1].p) * fibLevels[i];
+          addChip(price, Color(fibColors[i % fibColors.length]));
+        }
+      } else if ((d.type == 'long' || d.type == 'short') && d.pts.length >= 3) {
+        addChip(d.pts[0].p, const Color(0xFF2962FF));
+        addChip(d.pts[1].p, cGreen);
+        addChip(d.pts[2].p, cRed);
+      } else {
+        for (final pt in d.pts) {
+          addChip(pt.p, Color(d.color));
+        }
+      }
+    }
+    chips.removeWhere((c) => c.$1 < -9 || c.$1 > height + 9);
+    chips.sort((a, b) => a.$1.compareTo(b.$1));
+    for (var i = 1; i < chips.length; i++) {
+      if (chips[i].$1 - chips[i - 1].$1 < 18) {
+        chips[i] = (chips[i - 1].$1 + 18, chips[i].$2, chips[i].$3);
+      }
+    }
+    for (final (cy, txt, col) in chips) {
+      canvas.drawRect(
+        Rect.fromLTWH(plotW + 1, cy - 9, axisW - 2, 18),
+        Paint()..color = col,
+      );
+      _text(
+        canvas,
+        txt,
+        Offset(plotW + axisW - 5, cy - 6),
+        Colors.white,
+        9,
+        align: TextAlign.right,
+      );
     }
   }
 
@@ -1006,6 +1078,7 @@ class _PricePainter extends CustomPainter {
     double Function(double) y,
     double Function(int) xT,
     bool sel,
+    double height,
   ) {
     final temp = d.id == '_draft';
     final alpha = temp ? 0.7 : 1.0;
@@ -1065,6 +1138,73 @@ class _PricePainter extends CustomPainter {
           align: TextAlign.right,
         );
       }
+    } else if ((d.type == 'long' || d.type == 'short') && d.pts.length >= 3) {
+      // پوزیشن خرید/فروش: ناحیه سبز هدف، ناحیه قرمز ضرر + جعبه درصد سود/زیان
+      final isLong = d.type == 'long';
+      final entry = d.pts[0].p, target = d.pts[1].p, stop = d.pts[2].p;
+      final x0 = p[0].dx;
+      canvas.drawRect(
+        Rect.fromPoints(Offset(x0, y(entry)), Offset(plotW, y(target))),
+        Paint()..color = cGreen.withValues(alpha: 0.12 * alpha),
+      );
+      canvas.drawRect(
+        Rect.fromPoints(Offset(x0, y(entry)), Offset(plotW, y(stop))),
+        Paint()..color = cRed.withValues(alpha: 0.12 * alpha),
+      );
+      const entryCol = Color(0xFF2962FF);
+      canvas.drawLine(
+        Offset(x0, y(entry)),
+        Offset(plotW, y(entry)),
+        line(entryCol.withValues(alpha: alpha), sw),
+      );
+      canvas.drawLine(
+        Offset(x0, y(target)),
+        Offset(plotW, y(target)),
+        line(cGreen.withValues(alpha: alpha), sw),
+      );
+      canvas.drawLine(
+        Offset(x0, y(stop)),
+        Offset(plotW, y(stop)),
+        line(cRed.withValues(alpha: alpha), sw),
+      );
+      final tp = (isLong ? (target - entry) : (entry - target)) / entry * 100;
+      final sp = (isLong ? (entry - stop) : (stop - entry)) / entry * 100;
+      String pct(double v) => '${v >= 0 ? '+' : ''}${v.toStringAsFixed(2)}%';
+      const boxW = 150.0, boxH = 78.0;
+      final boxTop = (isLong ? y(entry) - boxH - 6 : y(entry) + 8).clamp(
+        4.0,
+        (height - boxH - 4).clamp(4.0, height),
+      );
+      final boxRect = Rect.fromLTWH(plotW - boxW - 4, boxTop, boxW, boxH);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(boxRect, Radius.circular(6)),
+        Paint()..color = cSurface.withValues(alpha: 0.92 * alpha),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(boxRect, Radius.circular(6)),
+        line(cBorder.withValues(alpha: alpha), 1)..style = PaintingStyle.stroke,
+      );
+      final bx = boxRect.left + 8;
+      var by = boxRect.top + 14;
+      _text(
+        canvas,
+        'ورود ${fmtPrice(entry)}',
+        Offset(bx, by),
+        Colors.white,
+        10,
+      );
+      by += 15;
+      _text(canvas, 'هدف ${pct(tp)}', Offset(bx, by), cGreen, 10);
+      by += 15;
+      _text(canvas, 'ضرر ${pct(-sp)}', Offset(bx, by), cRed, 10);
+      by += 15;
+      _text(
+        canvas,
+        'R:R ${sp == 0 ? '—' : (tp / sp).toStringAsFixed(2)}',
+        Offset(bx, by),
+        Colors.white,
+        10,
+      );
     } else {
       final path = Path()..moveTo(p[0].dx, p[0].dy);
       for (var i = 1; i < p.length; i++) {
