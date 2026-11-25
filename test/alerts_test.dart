@@ -50,7 +50,7 @@ void main() {
 
   test('priceAbove fires once and re-arms after dipping below', () {
     final r = rule('priceAbove', level: 100);
-    final key = 'BTCUSDT|1h';
+    const key = 'BTCUSDT|1h';
     var fired = evaluateAll(
       [r],
       {
