@@ -29,6 +29,7 @@ class IndCfg {
   double width;
   IndCfg(this.on, this.params, {this.color, this.lineColors, this.width = 1.2});
   num p(String k, num def) => params[k] ?? def;
+
   Map<String, dynamic> toJson() => {
     'on': on,
     'params': params,
@@ -140,6 +141,28 @@ class AppSettings {
     ...topCoins,
     ...savedSymbols,
   }.where((s) => !watchlistHidden.contains(s)).toList();
+
+  /// همه فیلدها را از یک نمونه دیگر می‌گیرد (برای بازیابی پشتیبان بدون
+  /// ساختن دوباره صفحه).
+  void copyFrom(AppSettings o) {
+    symbol = o.symbol;
+    iv = o.iv;
+    limit = o.limit;
+    chartType = o.chartType;
+    refresh = o.refresh;
+    apiBase = o.apiBase;
+    savedSymbols = List.of(o.savedSymbols);
+    watchlistHidden = List.of(o.watchlistHidden);
+    watchlistSort = o.watchlistSort;
+    indicators = Map.of(o.indicators);
+    overlays = Map.of(o.overlays);
+    paneOrder = List.of(o.paneOrder);
+    paneHeights = Map.of(o.paneHeights);
+    magnet = o.magnet;
+    lockAll = o.lockAll;
+    drawColor = o.drawColor;
+    fibLevels = List.of(o.fibLevels);
+  }
 
   Map<String, dynamic> toJson() => {
     'symbol': symbol,
