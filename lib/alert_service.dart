@@ -193,5 +193,6 @@ class AlertService {
       } catch (_) {}
     }
     await AlertsStore.save(rules);
+    await AlertsStore.saveLastBgCheck(DateTime.now(), fired.length);
   }
 }
