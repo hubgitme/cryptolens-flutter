@@ -1,6 +1,7 @@
 // پنل اندیکاتورها و تنظیمات (Bottom Sheet): روشن/خاموش، پارامتر، رنگ، ضخامت، ترتیب پنل‌ها
 import 'package:flutter/material.dart';
 
+import '../backup.dart';
 import '../settings.dart';
 import '../theme.dart';
 
@@ -86,10 +87,12 @@ const _widthOptions = [0.8, 1.2, 1.8, 2.5];
 class IndicatorSheet extends StatefulWidget {
   final AppSettings settings;
   final VoidCallback onChanged;
+  final VoidCallback? onRestored;
   const IndicatorSheet({
     super.key,
     required this.settings,
     required this.onChanged,
+    this.onRestored,
   });
 
   @override
@@ -325,6 +328,31 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
     );
   }
 
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      await BackupService.exportBackup();
+      _snack('فایل پشتیبان ساخته شد — از منوی اشتراک‌گذاری ذخیره‌اش کن');
+    } catch (_) {
+      _snack('پشتیبان‌گیری انجام نشد');
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final res = await BackupService.importBackup();
+    if (!mounted) return;
+    if (res.ok) {
+      widget.onRestored?.call();
+      Navigator.of(context).pop();
+    } else {
+      _snack(res.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.settings;
@@ -427,6 +455,37 @@ class _IndicatorSheetState extends State<IndicatorSheet> {
                 s.apiBase = v.trim();
                 widget.onChanged();
               },
+            ),
+            SizedBox(height: 16),
+            Divider(color: cBorder),
+            Text(
+              'پشتیبان‌گیری و بازیابی',
+              style: TextStyle(color: cMuted, fontSize: 12),
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _exportBackup,
+                    icon: const Icon(Icons.backup_outlined, size: 18),
+                    label: const Text('پشتیبان‌گیری'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _importBackup,
+                    icon: const Icon(Icons.restore_outlined, size: 18),
+                    label: const Text('بازیابی'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'پشتیبان شامل تنظیمات، رسم‌ها و هشدارها می‌شود. فایل را جای امن نگه دار؛ بازیابی تنظیمات فعلی را جایگزین می‌کند.',
+              style: TextStyle(color: cMuted, fontSize: 12),
             ),
             SizedBox(height: 16),
           ],

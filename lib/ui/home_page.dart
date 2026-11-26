@@ -516,8 +516,30 @@ class _HomePageState extends State<HomePage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: cSurface,
-      builder: (_) => IndicatorSheet(settings: s, onChanged: _saveAndRefresh),
+      builder: (_) => IndicatorSheet(
+        settings: s,
+        onChanged: _saveAndRefresh,
+        onRestored: _reloadAfterRestore,
+      ),
     );
+  }
+
+  /// بعد از بازیابی پشتیبان: تنظیمات و رسم‌ها را از دیسک دوباره می‌خواند
+  /// و چارت را با آن‌ها بارگذاری می‌کند.
+  Future<void> _reloadAfterRestore() async {
+    final fresh = await SettingsStore.load();
+    final drawings = await DrawingsStore.load();
+    if (!mounted) return;
+    s.copyFrom(fresh);
+    _allDrawings = drawings;
+    _symbolCtrl.text = s.symbol;
+    _selDrawId = null;
+    _selected = null;
+    _restartTimer();
+    setState(() => _version++);
+    _load();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('بازیابی انجام شد')));
   }
 
   void _movePane(String key, int dir) {
