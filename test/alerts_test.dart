@@ -1,8 +1,10 @@
 // تست‌های هشدارها — ارزیابی خالص (بدون Flutter)
 import 'package:cryptolens_app/alerts.dart';
+import 'package:cryptolens_app/alerts_store.dart';
 import 'package:cryptolens_app/indicators.dart';
 import 'package:cryptolens_app/models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 List<Candle> candles(List<double> closes) => List<Candle>.generate(
   closes.length,
@@ -190,6 +192,17 @@ void main() {
       evaluateRule(rule('rsiAbove', level: 70), candles([100, 101])).hit,
       isFalse,
     );
+  });
+
+  test('last background check timestamp roundtrip', () async {
+    SharedPreferences.setMockInitialValues({});
+    expect(await AlertsStore.loadLastBgCheck(), isNull);
+    final at = DateTime(2026, 11, 26, 10, 30);
+    await AlertsStore.saveLastBgCheck(at, 2);
+    final back = await AlertsStore.loadLastBgCheck();
+    expect(back, isNotNull);
+    expect(back!.at, at);
+    expect(back.fired, 2);
   });
 
   test('AlertRule json roundtrip', () {

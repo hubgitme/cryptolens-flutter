@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../alert_service.dart';
 import '../alerts.dart';
 import '../alerts_store.dart';
+import '../format.dart';
 import '../indicators.dart';
 import '../settings.dart';
 import '../theme.dart';
@@ -117,6 +118,7 @@ class AlertsPage extends StatefulWidget {
 class _AlertsPageState extends State<AlertsPage> {
   List<AlertRule> _rules = [];
   bool _loading = true;
+  ({DateTime at, int fired})? _lastBg;
 
   // فرم
   final _symbolCtrl = TextEditingController();
@@ -159,9 +161,11 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Future<void> _loadRules() async {
     final rules = await AlertsStore.load();
+    final lastBg = await AlertsStore.loadLastBgCheck();
     if (mounted) {
       setState(() {
         _rules = rules;
+        _lastBg = lastBg;
         _loading = false;
       });
     }
@@ -692,6 +696,13 @@ class _AlertsPageState extends State<AlertsPage> {
                           ),
                         ),
                       ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _lastBg == null
+                        ? 'آخرین چک پس‌زمینه: هنوز انجام نشده — اگر اپ بسته باشد و این خط عوض نشود، یعنی سیستم پس‌زمینه را اجرا نمی‌کند.'
+                        : 'آخرین چک پس‌زمینه: ${_lastBg!.at.month}/${_lastBg!.at.day} ساعت ${fmtClock(_lastBg!.at)} — ${_lastBg!.fired} هشدار شلیک شد.',
+                    style: const TextStyle(color: cMuted, fontSize: 12),
+                  ),
                   const SizedBox(height: 12),
                   const Text(
                     'چک پس‌زمینه هر ۱۵ دقیقه انجام می‌شود (حداقل اندروید)؛ وقتی چارت باز است، با هر بروزرسانی هم چک می‌شود — برای هر تایم‌فریمی که هشدار داشته باشی. اگر شرط هشدار همین حالا هم برقرار باشد، در اولین چک یک بار زنگ می‌زند و تا شرط برطرف و دوباره برقرار نشود تکرار نمی‌شود. برای اینکه آلارم در پس‌زمینه برسد، اجازه اعلان را بده و بهینه‌سازی باتری را برای اپ خاموش کن.',
